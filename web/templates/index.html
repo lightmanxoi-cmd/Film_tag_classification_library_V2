@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Library - 奈飞风格视频库</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">VIDEO LIBRARY</span>
+        </div>
+        <div class="nav-actions">
+            <button class="advanced-filter-btn" onclick="openAdvancedFilter()">
+                <span>🔍</span> 多级筛选
+            </button>
+        </div>
+        <div class="nav-search">
+            <input type="text" id="searchInput" placeholder="搜索视频...">
+            <button onclick="searchVideos()">搜索</button>
+        </div>
+        <div class="nav-stats" id="stats">
+            <span id="videoCount">0</span> 部视频
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <h3 class="sidebar-title">分类导航</h3>
+            <div id="tagTree" class="tag-tree">
+                <div class="loading">加载中...</div>
+            </div>
+        </aside>
+
+        <main class="content">
+            <div class="current-filter" id="currentFilter" style="display: none;">
+                <span class="filter-label">当前筛选:</span>
+                <span id="filterTags"></span>
+                <button class="clear-filter" onclick="clearFilter()">清除筛选</button>
+            </div>
+
+            <div class="video-grid" id="videoGrid">
+                <div class="loading">加载中...</div>
+            </div>
+
+            <div class="pagination" id="pagination">
+            </div>
+        </main>
+    </div>
+
+    <div class="video-player-modal" id="videoModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeVideoModal()">&times;</button>
+            <div class="video-info">
+                <h2 id="modalTitle"></h2>
+                <div class="video-tags" id="modalTags"></div>
+            </div>
+            <video id="videoPlayer" class="video-js vjs-big-play-centered vjs-fluid" controls preload="auto">
+                <p class="vjs-no-js">
+                    您的浏览器不支持视频播放，请升级浏览器
+                </p>
+            </video>
+            <div class="player-actions">
+                <div class="format-notice" id="formatNotice" style="display: none;">
+                    <p>⚠️ MKV/WMV格式视频浏览器可能无法播放</p>
+                </div>
+                <div class="action-buttons">
+                    <button class="action-btn local-play-btn" id="localPlayBtn" onclick="openLocalFile()">
+                        <span>📁</span> 本地播放
+                    </button>
+                    <button class="action-btn" onclick="copyFilePath()">
+                        <span>📋</span> 复制路径
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="advanced-filter-modal" id="advancedFilterModal">
+        <div class="filter-modal-content">
+            <div class="filter-modal-header">
+                <h2>多级筛选</h2>
+                <button class="close-btn" onclick="closeAdvancedFilter()">&times;</button>
+            </div>
+            <div class="filter-modal-body">
+                <div class="filter-mode">
+                    <span>筛选模式:</span>
+                    <label class="radio-label">
+                        <input type="radio" name="filterMode" value="or" checked> 
+                        <span>任意标签 (OR)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="filterMode" value="and"> 
+                        <span>全部标签 (AND)</span>
+                    </label>
+                </div>
+                <div class="filter-tags-container" id="filterTagsContainer">
+                    <div class="loading">加载标签中...</div>
+                </div>
+                <div class="selected-tags">
+                    <span class="selected-label">已选择:</span>
+                    <div id="selectedTagsList" class="selected-tags-list">
+                        <span class="no-selection">未选择任何标签</span>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-modal-footer">
+                <button class="btn-secondary" onclick="clearFilterSelection()">清除选择</button>
+                <button class="btn-primary" onclick="applyAdvancedFilter()">应用筛选</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
