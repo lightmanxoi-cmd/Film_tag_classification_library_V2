@@ -259,8 +259,8 @@ body {
 
 .video-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
 }
 
 .video-card {
@@ -289,7 +289,7 @@ body {
 }
 
 .video-card .thumbnail .play-icon {
-    font-size: 48px;
+    font-size: 56px;
     color: rgba(255,255,255,0.3);
     transition: all 0.3s;
 }
@@ -304,7 +304,7 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 48px;
+    font-size: 56px;
     color: rgba(255,255,255,0.8);
     opacity: 0;
     transition: all 0.3s;
@@ -338,12 +338,12 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 40px 12px 12px;
+    padding: 50px 14px 14px;
     background: linear-gradient(transparent, rgba(0,0,0,0.9));
 }
 
 .video-card .video-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -353,12 +353,12 @@ body {
 
 .video-card .video-tags {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
 }
 
 .video-card .video-tag {
-    font-size: 10px;
+    font-size: 11px;
     padding: 2px 6px;
     background: rgba(229, 9, 20, 0.3);
     border-radius: 3px;
@@ -882,6 +882,6 @@ body {
     }
     
     .video-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     }
 }
