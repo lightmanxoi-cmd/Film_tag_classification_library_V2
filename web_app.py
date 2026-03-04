@@ -1,9 +1,13 @@
 """
 奈飞风格视频播放网站 - Flask后端
+包含安全的登录认证系统
 """
 import os
 import re
-from flask import Flask, jsonify, request, send_file, render_template, Response
+import secrets
+import time
+from datetime import datetime, timedelta
+from flask import Flask, jsonify, request, send_file, render_template, Response, redirect, url_for, session, g
 from flask_cors import CORS
 from video_tag_system.core.database import DatabaseManager
 from video_tag_system.services.video_service import VideoService
@@ -11,16 +15,151 @@ from video_tag_system.services.tag_service import TagService
 from video_tag_system.services.video_tag_service import VideoTagService
 from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
 from sqlalchemy import text
+from functools import wraps
+
+INACTIVITY_TIMEOUT = 1800
 
 app = Flask(__name__, 
             static_folder='web/static',
             template_folder='web/templates')
+
+app.secret_key = secrets.token_hex(32)
+app.config['SESSION_COOKIE_SECURE'] = False
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400
+
 CORS(app)
 
 db_manager = DatabaseManager(database_url="sqlite:///./video_library.db", echo=False)
 db_manager.create_tables()
 
 VIDEO_BASE_PATH = "F:\\666"
+
+AUTH_CONFIG_FILE = '.auth_config.json'
+
+def get_auth_config_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), AUTH_CONFIG_FILE)
+
+def load_auth_config():
+    config_path = get_auth_config_path()
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                import json
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_auth_config(config):
+    config_path = get_auth_config_path()
+    try:
+        import json
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"保存认证配置失败: {e}")
+
+try:
+    from argon2 import PasswordHasher
+    from argon2.exceptions import VerifyMismatchError, VerificationError
+    ARGON2_AVAILABLE = True
+    ph = PasswordHasher(
+        time_cost=3,
+        memory_cost=65536,
+        parallelism=4,
+        hash_len=32,
+        salt_len=16
+    )
+except ImportError:
+    ARGON2_AVAILABLE = False
+    import hashlib
+    import hmac
+    ph = None
+    print("警告: argon2-cffi 未安装，将使用 PBKDF2-SHA256 作为后备方案")
+    print("建议运行: pip install argon2-cffi")
+
+def hash_password(password: str) -> str:
+    if ARGON2_AVAILABLE:
+        return ph.hash(password)
+    else:
+        salt = os.urandom(32)
+        iterations = 100000
+        hash_bytes = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt,
+            iterations
+        )
+        return f"pbkdf2_sha256${iterations}${salt.hex()}${hash_bytes.hex()}"
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if not password_hash:
+        return False
+    
+    if ARGON2_AVAILABLE:
+        try:
+            ph.verify(password_hash, password)
+            return True
+        except (VerifyMismatchError, VerificationError):
+            return False
+    else:
+        try:
+            parts = password_hash.split('$')
+            if len(parts) != 4 or parts[0] != 'pbkdf2_sha256':
+                return False
+            iterations = int(parts[1])
+            salt = bytes.fromhex(parts[2])
+            stored_hash = parts[3]
+            computed_hash = hashlib.pbkdf2_hmac(
+                'sha256',
+                password.encode('utf-8'),
+                salt,
+                iterations
+            ).hex()
+            return hmac.compare_digest(stored_hash, computed_hash)
+        except Exception:
+            return False
+
+def init_default_password():
+    config = load_auth_config()
+    if not config.get('password_hash'):
+        default_password = '13245768'
+        password_hash = hash_password(default_password)
+        config['password_hash'] = password_hash
+        config['session_secret'] = secrets.token_hex(32)
+        save_auth_config(config)
+        print(f"已设置默认密码: {default_password}")
+        print("请登录后及时修改密码！")
+    return config
+
+auth_config = init_default_password()
+if auth_config.get('session_secret'):
+    app.secret_key = auth_config['session_secret']
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('authenticated', False):
+            if request.path.startswith('/api/') or request.path.startswith('/video/'):
+                return jsonify({'success': False, 'error': '未授权访问，请先登录'}), 401
+            return redirect(url_for('login'))
+        
+        last_activity = session.get('last_activity')
+        if last_activity:
+            elapsed = time.time() - last_activity
+            if elapsed > INACTIVITY_TIMEOUT:
+                session.clear()
+                if request.path.startswith('/api/') or request.path.startswith('/video/'):
+                    return jsonify({'success': False, 'error': '登录已过期，请重新登录', 'timeout': True}), 401
+                return redirect(url_for('login'))
+        
+        session['last_activity'] = time.time()
+        session.modified = True
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 def get_services():
     session = db_manager.session_factory()
@@ -55,11 +194,68 @@ def update_thumbnails():
     
     print("=" * 50)
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('authenticated', False):
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        config = load_auth_config()
+        stored_hash = config.get('password_hash', '')
+        
+        if verify_password(password, stored_hash):
+            session['authenticated'] = True
+            session['last_activity'] = time.time()
+            session.permanent = True
+            next_url = request.args.get('next') or url_for('index')
+            return redirect(next_url)
+        else:
+            return render_template('login.html', 
+                                   csrf_token=secrets.token_hex(16),
+                                   error=True)
+    
+    return render_template('login.html', 
+                           csrf_token=secrets.token_hex(16),
+                           error=False)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
+@app.route('/api/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.get_json()
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    
+    if not old_password or not new_password:
+        return jsonify({'success': False, 'error': '请填写完整信息'})
+    
+    if len(new_password) < 6:
+        return jsonify({'success': False, 'error': '新密码长度至少6位'})
+    
+    config = load_auth_config()
+    stored_hash = config.get('password_hash', '')
+    
+    if not verify_password(old_password, stored_hash):
+        return jsonify({'success': False, 'error': '原密码错误'})
+    
+    new_hash = hash_password(new_password)
+    config['password_hash'] = new_hash
+    save_auth_config(config)
+    
+    return jsonify({'success': True, 'message': '密码修改成功'})
+
 @app.route('/api/tags/tree', methods=['GET'])
+@login_required
 def get_tag_tree():
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -92,6 +288,7 @@ def get_tag_tree():
         session.close()
 
 @app.route('/api/tags/<int:tag_id>/videos', methods=['GET'])
+@login_required
 def get_videos_by_tag(tag_id):
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -132,6 +329,7 @@ def get_videos_by_tag(tag_id):
         session.close()
 
 @app.route('/api/videos', methods=['GET'])
+@login_required
 def get_videos():
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -172,6 +370,7 @@ def get_videos():
         session.close()
 
 @app.route('/api/videos/<int:video_id>', methods=['GET'])
+@login_required
 def get_video_detail(video_id):
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -191,6 +390,7 @@ def get_video_detail(video_id):
         session.close()
 
 @app.route('/api/videos/by-tags', methods=['POST'])
+@login_required
 def get_videos_by_multiple_tags():
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -246,6 +446,7 @@ def get_videos_by_multiple_tags():
         session.close()
 
 @app.route('/video/stream/<int:video_id>')
+@login_required
 def serve_video_by_id(video_id):
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -306,6 +507,7 @@ def serve_video_by_id(video_id):
         session.close()
 
 @app.route('/api/video/stream/<int:video_id>')
+@login_required
 def get_video_stream_url(video_id):
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -331,6 +533,7 @@ def get_video_stream_url(video_id):
         session.close()
 
 @app.route('/api/stats')
+@login_required
 def get_stats():
     video_svc, tag_svc, video_tag_svc, session = get_services()
     try:
@@ -348,5 +551,10 @@ def get_stats():
         session.close()
 
 if __name__ == '__main__':
+    print("=" * 50)
+    print("安全登录系统已启用")
+    print("初始密码: 13245768")
+    print("请登录后及时修改密码！")
+    print("=" * 50)
     update_thumbnails()
     app.run(host='0.0.0.0', port=5000, debug=True)

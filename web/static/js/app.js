@@ -6,6 +6,19 @@ let currentVideoPath = '';
 let touchStartX = 0;
 let touchStartY = 0;
 
+async function fetchWithAuth(url, options = {}) {
+    const response = await fetch(url, options);
+    if (response.status === 401) {
+        const data = await response.clone().json().catch(() => ({}));
+        if (data.timeout) {
+            alert('登录已过期，请重新登录');
+        }
+        window.location.href = '/login';
+        throw new Error('Unauthorized');
+    }
+    return response;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     loadTagTree();
     loadVideos();
@@ -140,7 +153,7 @@ function mobileSearchVideos() {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">搜索中...</div>';
     
-    fetch(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`)
+    fetchWithAuth(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`)
         .then(response => response.json())
         .then(result => {
             if (result.success) {
@@ -163,7 +176,7 @@ function mobileSearchVideos() {
 
 async function loadTagTree() {
     try {
-        const response = await fetch('/api/tags/tree');
+        const response = await fetchWithAuth('/api/tags/tree');
         const result = await response.json();
         
         if (result.success) {
@@ -231,7 +244,7 @@ async function loadVideos(page = 1) {
         let result;
         
         if (currentTagIds.length > 0) {
-            const response = await fetch('/api/videos/by-tags', {
+            const response = await fetchWithAuth('/api/videos/by-tags', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -245,7 +258,7 @@ async function loadVideos(page = 1) {
             });
             result = await response.json();
         } else {
-            const response = await fetch(`/api/videos?page=${page}&page_size=50`);
+            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50`);
             result = await response.json();
         }
         
@@ -373,7 +386,7 @@ async function searchVideos() {
     container.innerHTML = '<div class="loading">搜索中...</div>';
     
     try {
-        const response = await fetch(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`);
+        const response = await fetchWithAuth(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`);
         const result = await response.json();
         
         if (result.success) {
@@ -395,7 +408,7 @@ async function playVideo(videoId, title, tags, filePath) {
     try {
         currentVideoPath = filePath;
         
-        const response = await fetch(`/api/video/stream/${videoId}`);
+        const response = await fetchWithAuth(`/api/video/stream/${videoId}`);
         const result = await response.json();
         
         if (result.success) {
@@ -566,7 +579,7 @@ document.addEventListener('keydown', function(e) {
 
 async function loadStats() {
     try {
-        const response = await fetch('/api/stats');
+        const response = await fetchWithAuth('/api/stats');
         const result = await response.json();
         
         if (result.success) {
@@ -741,7 +754,7 @@ async function loadVideosByTags(tagIds, matchAll = false) {
     container.innerHTML = '<div class="loading">加载中...</div>';
     
     try {
-        const response = await fetch('/api/videos/by-tags', {
+        const response = await fetchWithAuth('/api/videos/by-tags', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

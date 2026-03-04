@@ -53,6 +53,9 @@ Thumbs.db
 .env
 .env.local
 
+# Auth config (contains password hash)
+.auth_config.json
+
 # Jupyter
 .ipynb_checkpoints/
 
