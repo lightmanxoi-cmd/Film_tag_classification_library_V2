@@ -171,16 +171,17 @@ def get_services():
     )
 
 def update_thumbnails():
-    """启动时检查并生成缺失的视频缩略图"""
+    """启动时检查并生成缺失的视频缩略图和GIF预览"""
     print("=" * 50)
-    print("Checking video thumbnails...")
+    print("Checking video thumbnails and GIF previews...")
     
     thumbnail_gen = get_thumbnail_generator()
     session = db_manager.session_factory()
     
     try:
-        result = session.execute(text("SELECT id, file_path, title FROM videos")).fetchall()
+        result = session.execute(text("SELECT id, file_path, title, duration FROM videos")).fetchall()
         videos = [(row[0], row[1], row[2]) for row in result]
+        videos_with_duration = [(row[0], row[1], row[2], row[3]) for row in result]
         
         print(f"Total videos: {len(videos)}")
         
@@ -192,8 +193,18 @@ def update_thumbnails():
             print(f"Found {len(missing)} videos without thumbnails, generating...")
             results = thumbnail_gen.batch_generate(missing, max_workers=2, force=False)
             print(f"Thumbnail generation complete: Success {results['success']}, Failed {results['failed']}")
+        
+        missing_gifs = thumbnail_gen.get_missing_gifs(videos)
+        
+        if not missing_gifs:
+            print("All videos have GIF previews.")
+        else:
+            print(f"Found {len(missing_gifs)} videos without GIF previews, generating...")
+            gif_videos = [(v[0], v[1], v[2], None) for v in missing_gifs]
+            results = thumbnail_gen.batch_generate_gifs(gif_videos, max_workers=1, force=False)
+            print(f"GIF generation complete: Success {results['success']}, Failed {results['failed']}, Skipped {results['skipped']}")
     except Exception as e:
-        print(f"Error updating thumbnails: {e}")
+        print(f"Error updating thumbnails/GIFs: {e}")
     finally:
         session.close()
     
@@ -328,7 +339,8 @@ def get_videos_by_tag(tag_id):
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
+                'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
         return jsonify({
@@ -370,7 +382,8 @@ def get_videos():
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
+                'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
         return jsonify({
@@ -385,6 +398,7 @@ def get_videos():
         })
     finally:
         session.close()
+
 
 @app.route('/api/videos/<int:video_id>', methods=['GET'])
 @login_required
@@ -447,7 +461,8 @@ def get_videos_by_multiple_tags():
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
+                'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
         return jsonify({
@@ -502,7 +517,8 @@ def get_videos_by_tags_advanced():
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
+                'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
         return jsonify({
@@ -620,6 +636,44 @@ def get_stats():
                 'tag_count': tag_count
             }
         })
+    finally:
+        session.close()
+
+@app.route('/api/generate-gif/<int:video_id>', methods=['POST'])
+@login_required
+def generate_gif_for_video(video_id):
+    video_svc, tag_svc, video_tag_svc, session = get_services()
+    try:
+        video = video_svc.get_video(video_id)
+        video_title = video.title or os.path.basename(video.file_path)
+        
+        thumbnail_gen = get_thumbnail_generator()
+        
+        if thumbnail_gen.has_gif(video_title):
+            return jsonify({
+                'success': True,
+                'message': 'GIF already exists',
+                'gif_url': thumbnail_gen.get_gif_url(video_title)
+            })
+        
+        result = thumbnail_gen.generate_gif(video.file_path, video_title, video.duration)
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'GIF generated successfully',
+                'gif_url': thumbnail_gen.get_gif_url(video_title)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate GIF'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
     finally:
         session.close()
 

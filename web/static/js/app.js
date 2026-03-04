@@ -302,16 +302,37 @@ function renderVideos(videos) {
         const thumbnailStyle = video.thumbnail ? 
             `style="background-image: url('${video.thumbnail}'); background-size: cover; background-position: center;"` : '';
         
+        const gifElement = video.gif ? 
+            `<img class="gif-preview" src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
+        
         card.innerHTML = `
             <div class="thumbnail ${formatClass}" ${thumbnailStyle}>
                 ${!video.thumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
                 <span class="format-badge">${ext.toUpperCase()}</span>
+                ${gifElement}
             </div>
             <div class="video-overlay">
                 <div class="video-title">${video.title}</div>
                 <div class="video-tags">${tagsHtml}</div>
             </div>
         `;
+        
+        if (video.gif) {
+            const thumbnailDiv = card.querySelector('.thumbnail');
+            const gifImg = card.querySelector('.gif-preview');
+            
+            card.addEventListener('mouseenter', () => {
+                thumbnailDiv.style.backgroundImage = 'none';
+                gifImg.style.display = 'block';
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                gifImg.style.display = 'none';
+                if (video.thumbnail) {
+                    thumbnailDiv.style.backgroundImage = `url('${video.thumbnail}')`;
+                }
+            });
+        }
         
         card.addEventListener('click', () => playVideo(video.id, video.title, video.tags, video.file_path));
         container.appendChild(card);

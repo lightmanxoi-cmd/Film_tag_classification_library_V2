@@ -40,6 +40,7 @@ env/
 
 # Thumbnails (generated)
 web/static/thumbnails/
+web/static/gifs/
 
 # Logs
 *.log
