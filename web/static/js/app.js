@@ -459,6 +459,7 @@ async function playVideo(videoId, title, tags, filePath) {
             videoPlayer = videojs('videoPlayer', {
                 fluid: true,
                 responsive: true,
+                muted: true,
                 playbackRates: [0.5, 1, 1.25, 1.5, 2],
                 controlBar: {
                     children: [
