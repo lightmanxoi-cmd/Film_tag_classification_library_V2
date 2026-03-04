@@ -384,8 +384,19 @@ body {
 
 .filter-separator {
     color: #666;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 400;
+    margin: 0 4px;
+    opacity: 0.7;
+}
+
+.filter-separator.or {
+    color: #e50914;
+    font-size: 10px;
+    background: rgba(229, 9, 20, 0.2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin: 0 4px;
 }
 
 .clear-filter {
@@ -759,21 +770,18 @@ body {
 }
 
 .advanced-filter-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     padding: 8px 16px;
-    background: rgba(229, 9, 20, 0.2);
-    border: 1px solid #e50914;
-    color: #fff;
-    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: #e5e5e5;
     cursor: pointer;
     font-size: 14px;
-    transition: all 0.3s;
+    font-weight: 500;
+    transition: color 0.3s;
 }
 
 .advanced-filter-btn:hover {
-    background: rgba(229, 9, 20, 0.4);
+    color: #fff;
 }
 
 .advanced-filter-modal {
@@ -827,34 +835,14 @@ body {
     flex: 1;
 }
 
-.filter-mode {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+.filter-hint {
+    font-size: 13px;
+    color: #666;
     margin-bottom: 20px;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    flex-wrap: wrap;
-}
-
-.filter-mode > span {
-    font-weight: 500;
-    color: #999;
-}
-
-.radio-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    color: #ccc;
-}
-
-.radio-label input[type="radio"] {
-    accent-color: #e50914;
-    width: 16px;
-    height: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+    border-left: 3px solid #e50914;
 }
 
 .filter-tags-container {
@@ -865,9 +853,7 @@ body {
 }
 
 .filter-category {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    padding: 16px;
+    margin-bottom: 24px;
 }
 
 .filter-category-header {
@@ -876,16 +862,20 @@ body {
     gap: 8px;
     margin-bottom: 12px;
     cursor: pointer;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
 }
 
 .filter-category-header h4 {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
-    color: #e50914;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .filter-category-header .toggle-icon {
-    font-size: 12px;
+    font-size: 10px;
     color: #666;
     transition: transform 0.3s;
 }
@@ -905,48 +895,39 @@ body {
 }
 
 .filter-tag-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 20px;
+    display: inline-block;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
     cursor: pointer;
     transition: all 0.2s;
-    font-size: 13px;
+    font-size: 14px;
+    color: #b3b3b3;
+    border-radius: 4px;
 }
 
 .filter-tag-item:hover {
-    border-color: #e50914;
-    background: rgba(229, 9, 20, 0.1);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .filter-tag-item.selected {
-    background: rgba(229, 9, 20, 0.3);
-    border-color: #e50914;
     color: #fff;
+    background: #e50914;
 }
 
 .filter-tag-item input[type="checkbox"] {
-    accent-color: #e50914;
-    width: 14px;
-    height: 14px;
+    display: none;
 }
 
 .filter-tag-item .tag-count {
-    font-size: 11px;
-    color: #666;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 2px 6px;
-    border-radius: 10px;
+    display: none;
 }
 
 .selected-tags {
     padding: 16px;
-    background: rgba(229, 9, 20, 0.1);
-    border-radius: 8px;
-    border: 1px solid rgba(229, 9, 20, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
 }
 
 .selected-label {
@@ -954,6 +935,9 @@ body {
     color: #999;
     margin-bottom: 8px;
     display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .selected-tags-list {
@@ -964,13 +948,14 @@ body {
 }
 
 .selected-tag-chip {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
+    gap: 6px;
+    padding: 6px 12px;
     background: #e50914;
-    border-radius: 16px;
-    font-size: 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 .selected-tag-chip .remove-tag {
@@ -1271,16 +1256,6 @@ body {
     
     .filter-modal-body {
         padding: 16px;
-    }
-    
-    .filter-mode {
-        gap: 12px;
-        padding: 10px 12px;
-    }
-    
-    .filter-mode > span {
-        width: 100%;
-        margin-bottom: 4px;
     }
     
     .filter-category {

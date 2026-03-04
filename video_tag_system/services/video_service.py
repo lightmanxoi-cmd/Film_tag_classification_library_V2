@@ -137,6 +137,52 @@ class VideoService:
             total_pages=total_pages
         )
     
+    def list_videos_by_tags_advanced(
+        self,
+        tags_by_category: dict,
+        page: int = 1,
+        page_size: int = 20
+    ) -> VideoListResponse:
+        """
+        高级标签筛选视频
+        同一分类下的标签为OR关系，不同分类间为AND关系
+        
+        Args:
+            tags_by_category: {category_id: [tag_id1, tag_id2, ...], ...}
+            page: 页码
+            page_size: 每页数量
+        """
+        if not tags_by_category:
+            return VideoListResponse(
+                items=[],
+                total=0,
+                page=page,
+                page_size=page_size,
+                total_pages=0
+            )
+        
+        if page < 1:
+            page = 1
+        if page_size < 1 or page_size > 100:
+            page_size = 20
+        
+        videos, total = self.video_repo.list_by_tags_advanced(
+            tags_by_category=tags_by_category,
+            page=page,
+            page_size=page_size
+        )
+        
+        items = [self._to_response(v) for v in videos]
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
+        
+        return VideoListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    
     def get_video_tags(self, video_id: int) -> List[TagResponse]:
         """获取视频的所有标签"""
         video = self.video_repo.get_by_id(video_id)

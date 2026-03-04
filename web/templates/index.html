@@ -24,10 +24,7 @@
             <span class="logo">VIDEO LIBRARY</span>
         </div>
         <div class="nav-actions">
-            <button class="advanced-filter-btn" onclick="openAdvancedFilter()">
-                <span class="btn-icon">🔍</span>
-                <span class="btn-text">多级筛选</span>
-            </button>
+            <button class="advanced-filter-btn" onclick="openAdvancedFilter()">多级筛选</button>
         </div>
         <div class="nav-search">
             <input type="text" id="searchInput" placeholder="搜索视频...">
@@ -113,17 +110,7 @@
                 <button class="close-btn" onclick="closeAdvancedFilter()">&times;</button>
             </div>
             <div class="filter-modal-body">
-                <div class="filter-mode">
-                    <span>筛选模式:</span>
-                    <label class="radio-label">
-                        <input type="radio" name="filterMode" value="or" checked> 
-                        <span>任意标签 (OR)</span>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="filterMode" value="and"> 
-                        <span>全部标签 (AND)</span>
-                    </label>
-                </div>
+                <div class="filter-hint">同一分类下多选为"或"关系，不同分类间为"和"关系</div>
                 <div class="filter-tags-container" id="filterTagsContainer">
                     <div class="loading">加载标签中...</div>
                 </div>

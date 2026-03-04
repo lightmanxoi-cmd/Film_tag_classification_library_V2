@@ -445,6 +445,60 @@ def get_videos_by_multiple_tags():
     finally:
         session.close()
 
+@app.route('/api/videos/by-tags-advanced', methods=['POST'])
+@login_required
+def get_videos_by_tags_advanced():
+    video_svc, tag_svc, video_tag_svc, session = get_services()
+    try:
+        data = request.get_json()
+        tags_by_category = data.get('tags_by_category', {})
+        page = data.get('page', 1)
+        page_size = data.get('page_size', 50)
+        
+        if not tags_by_category:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'videos': [],
+                    'total': 0,
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': 0
+                }
+            })
+        
+        result = video_svc.list_videos_by_tags_advanced(
+            tags_by_category=tags_by_category,
+            page=page,
+            page_size=page_size
+        )
+        
+        thumbnail_gen = get_thumbnail_generator()
+        
+        videos = []
+        for v in result.items:
+            videos.append({
+                'id': v.id,
+                'title': v.title or os.path.basename(v.file_path),
+                'file_path': v.file_path,
+                'duration': v.duration,
+                'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
+                'thumbnail': thumbnail_gen.get_thumbnail_url(v.id)
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'videos': videos,
+                'total': result.total,
+                'page': result.page,
+                'page_size': result.page_size,
+                'total_pages': result.total_pages
+            }
+        })
+    finally:
+        session.close()
+
 @app.route('/video/stream/<int:video_id>')
 @login_required
 def serve_video_by_id(video_id):

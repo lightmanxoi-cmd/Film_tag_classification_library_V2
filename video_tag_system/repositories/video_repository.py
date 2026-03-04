@@ -136,6 +136,54 @@ class VideoRepository:
         
         return videos, total
     
+    def list_by_tags_advanced(
+        self,
+        tags_by_category: dict,
+        page: int = 1,
+        page_size: int = 20
+    ) -> Tuple[List[Video], int]:
+        """
+        高级标签筛选
+        同一分类下的标签为OR关系，不同分类间为AND关系
+        
+        Args:
+            tags_by_category: {category_id: [tag_id1, tag_id2, ...], ...}
+            page: 页码
+            page_size: 每页数量
+            
+        Returns:
+            (videos, total)
+        """
+        from video_tag_system.models.video_tag import VideoTag
+        from sqlalchemy import and_
+        
+        if not tags_by_category:
+            return [], 0
+        
+        conditions = []
+        for category_id, tag_ids in tags_by_category.items():
+            if tag_ids:
+                subquery = (
+                    select(VideoTag.video_id)
+                    .where(VideoTag.tag_id.in_(tag_ids))
+                )
+                conditions.append(Video.id.in_(subquery))
+        
+        if not conditions:
+            return [], 0
+        
+        stmt = select(Video).where(and_(*conditions)).distinct()
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        
+        total = self.session.execute(count_stmt).scalar()
+        
+        stmt = stmt.order_by(Video.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        
+        videos = list(self.session.execute(stmt).scalars().all())
+        
+        return videos, total
+    
     def exists_by_file_path(self, file_path: str) -> bool:
         """检查文件路径是否存在"""
         stmt = select(func.count(Video.id)).where(Video.file_path == file_path)

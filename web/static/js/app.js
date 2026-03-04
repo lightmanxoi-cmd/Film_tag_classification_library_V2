@@ -591,6 +591,7 @@ async function loadStats() {
 }
 
 let selectedFilterTags = [];
+let selectedFilterTagsByCategory = {};
 
 function openAdvancedFilter() {
     const modal = document.getElementById('advancedFilterModal');
@@ -619,6 +620,8 @@ function renderFilterTags() {
         const categoryDiv = document.createElement('div');
         categoryDiv.className = 'filter-category';
         
+        const selectedInCategory = selectedFilterTagsByCategory[category.id] || [];
+        
         categoryDiv.innerHTML = `
             <div class="filter-category-header" onclick="toggleFilterCategory(this)">
                 <span class="toggle-icon">▼</span>
@@ -626,10 +629,10 @@ function renderFilterTags() {
             </div>
             <div class="filter-category-tags">
                 ${category.children.map(tag => `
-                    <label class="filter-tag-item ${selectedFilterTags.includes(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}">
+                    <label class="filter-tag-item ${selectedFilterTags.includes(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-category-id="${category.id}">
                         <input type="checkbox" 
                                ${selectedFilterTags.includes(tag.id) ? 'checked' : ''} 
-                               onchange="toggleFilterTag(${tag.id}, '${tag.name.replace(/'/g, "\\'")}')">
+                               onchange="toggleFilterTag(${tag.id}, ${category.id}, '${tag.name.replace(/'/g, "\\'")}')">
                         <span>${tag.name}</span>
                         <span class="tag-count">${tag.video_count || 0}</span>
                     </label>
@@ -646,13 +649,23 @@ function toggleFilterCategory(header) {
     category.classList.toggle('collapsed');
 }
 
-function toggleFilterTag(tagId, tagName) {
+function toggleFilterTag(tagId, categoryId, tagName) {
     const index = selectedFilterTags.indexOf(tagId);
     
     if (index === -1) {
         selectedFilterTags.push(tagId);
+        if (!selectedFilterTagsByCategory[categoryId]) {
+            selectedFilterTagsByCategory[categoryId] = [];
+        }
+        selectedFilterTagsByCategory[categoryId].push(tagId);
     } else {
         selectedFilterTags.splice(index, 1);
+        if (selectedFilterTagsByCategory[categoryId]) {
+            const catIndex = selectedFilterTagsByCategory[categoryId].indexOf(tagId);
+            if (catIndex !== -1) {
+                selectedFilterTagsByCategory[categoryId].splice(catIndex, 1);
+            }
+        }
     }
     
     const tagItem = document.querySelector(`.filter-tag-item[data-tag-id="${tagId}"]`);
@@ -675,7 +688,7 @@ function updateSelectedTagsList() {
     allTags.forEach(category => {
         category.children.forEach(tag => {
             if (selectedFilterTags.includes(tag.id)) {
-                selectedTagsInfo.push({ id: tag.id, name: tag.name });
+                selectedTagsInfo.push({ id: tag.id, name: tag.name, categoryId: category.id });
             }
         });
     });
@@ -683,15 +696,22 @@ function updateSelectedTagsList() {
     container.innerHTML = selectedTagsInfo.map(tag => `
         <span class="selected-tag-chip">
             ${tag.name}
-            <span class="remove-tag" onclick="removeFilterTag(${tag.id})">×</span>
+            <span class="remove-tag" onclick="removeFilterTag(${tag.id}, ${tag.categoryId})">×</span>
         </span>
     `).join('');
 }
 
-function removeFilterTag(tagId) {
+function removeFilterTag(tagId, categoryId) {
     const index = selectedFilterTags.indexOf(tagId);
     if (index !== -1) {
         selectedFilterTags.splice(index, 1);
+    }
+    
+    if (selectedFilterTagsByCategory[categoryId]) {
+        const catIndex = selectedFilterTagsByCategory[categoryId].indexOf(tagId);
+        if (catIndex !== -1) {
+            selectedFilterTagsByCategory[categoryId].splice(catIndex, 1);
+        }
     }
     
     const tagItem = document.querySelector(`.filter-tag-item[data-tag-id="${tagId}"]`);
@@ -705,6 +725,7 @@ function removeFilterTag(tagId) {
 
 function clearFilterSelection() {
     selectedFilterTags = [];
+    selectedFilterTagsByCategory = {};
     
     document.querySelectorAll('.filter-tag-item.selected').forEach(item => {
         item.classList.remove('selected');
@@ -720,9 +741,6 @@ async function applyAdvancedFilter() {
         return;
     }
     
-    const filterMode = document.querySelector('input[name="filterMode"]:checked').value;
-    const matchAll = filterMode === 'and';
-    
     closeAdvancedFilter();
     
     currentTagIds = [...selectedFilterTags];
@@ -731,39 +749,53 @@ async function applyAdvancedFilter() {
     const filterContainer = document.getElementById('currentFilter');
     const filterTagsSpan = document.getElementById('filterTags');
     
-    const selectedTagsInfo = [];
+    const categoryGroups = [];
     allTags.forEach(category => {
-        category.children.forEach(tag => {
-            if (selectedFilterTags.includes(tag.id)) {
-                selectedTagsInfo.push(tag.name);
+        const selectedInCategory = (selectedFilterTagsByCategory[category.id] || []);
+        if (selectedInCategory.length > 0) {
+            const tagNames = category.children
+                .filter(tag => selectedInCategory.includes(tag.id))
+                .map(tag => tag.name);
+            categoryGroups.push({
+                categoryName: category.name,
+                tagNames: tagNames
+            });
+        }
+    });
+    
+    let filterHtml = '';
+    categoryGroups.forEach((group, index) => {
+        if (index > 0) {
+            filterHtml += '<span class="filter-separator">+</span>';
+        }
+        group.tagNames.forEach((name, tagIndex) => {
+            if (tagIndex > 0) {
+                filterHtml += '<span class="filter-separator or">或</span>';
             }
+            filterHtml += `<span class="filter-tag">${name}</span>`;
         });
     });
     
-    filterTagsSpan.innerHTML = selectedTagsInfo.map(name => 
-        `<span class="filter-tag">${name}</span>`
-    ).join(` <span class="filter-separator">${matchAll ? 'AND' : 'OR'}</span> `);
-    
+    filterTagsSpan.innerHTML = filterHtml;
     filterContainer.style.display = 'flex';
     
-    await loadVideosByTags(selectedFilterTags, matchAll);
+    await loadVideosByTagsAdvanced(selectedFilterTagsByCategory);
 }
 
-async function loadVideosByTags(tagIds, matchAll = false) {
+async function loadVideosByTagsAdvanced(tagsByCategory) {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">加载中...</div>';
     
     try {
-        const response = await fetchWithAuth('/api/videos/by-tags', {
+        const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                tag_ids: tagIds,
+                tags_by_category: tagsByCategory,
                 page: currentPage,
-                page_size: 50,
-                match_all: matchAll
+                page_size: 50
             })
         });
         
