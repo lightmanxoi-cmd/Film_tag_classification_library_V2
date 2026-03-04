@@ -4,6 +4,8 @@ let shuffledIndices = [];
 let currentIndices = [0, 0, 0, 0];
 let currentVideoIds = [-1, -1, -1, -1];
 let hideControlsTimeout = null;
+let clickTimers = [null, null, null, null];
+let lastClickTime = [0, 0, 0, 0];
 
 const loadingScreen = document.getElementById('loadingScreen');
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');
@@ -297,6 +299,27 @@ function setupEventListeners() {
         player.volumeSlider.addEventListener('input', (e) => {
             e.stopPropagation();
             setVolume(index, parseFloat(e.target.value));
+        });
+        
+        player.cell.addEventListener('click', (e) => {
+            if (e.target.closest('.control-bar')) return;
+            
+            const now = Date.now();
+            const timeDiff = now - lastClickTime[index];
+            lastClickTime[index] = now;
+            
+            if (timeDiff < 300) {
+                if (clickTimers[index]) {
+                    clearTimeout(clickTimers[index]);
+                    clickTimers[index] = null;
+                }
+                togglePlay(index);
+            } else {
+                clickTimers[index] = setTimeout(() => {
+                    playNextVideo(index);
+                    clickTimers[index] = null;
+                }, 300);
+            }
         });
     });
     
