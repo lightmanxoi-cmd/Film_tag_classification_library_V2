@@ -808,6 +808,30 @@ body {
     cursor: not-allowed;
 }
 
+.multi-play-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid #333;
+    color: #e5e5e5;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+    border-radius: 4px;
+    margin-left: 8px;
+}
+
+.multi-play-btn:hover:not(:disabled) {
+    color: #fff;
+    border-color: #e50914;
+    background: rgba(229, 9, 20, 0.1);
+}
+
+.multi-play-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .advanced-filter-modal {
     display: none;
     position: fixed;

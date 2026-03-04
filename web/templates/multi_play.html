@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>Multi Play</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/multi_play.css">
+</head>
+<body>
+    <div class="app" id="app">
+        <div class="loading-screen" id="loadingScreen">
+            <div class="loading-spinner"></div>
+            <p>Loading videos...</p>
+        </div>
+
+        <div class="multi-player-container" id="multiPlayerContainer" style="display: none;">
+            <div class="top-bar" id="topBar">
+                <div class="video-count" id="videoCount">0 videos</div>
+                <button class="back-btn" onclick="goBack()">Back</button>
+            </div>
+            
+            <div class="video-grid">
+                <div class="video-cell" id="cell0">
+                    <video id="video0" class="video-player" autoplay muted></video>
+                    <div class="video-overlay">
+                        <span class="video-title" id="title0"></span>
+                    </div>
+                </div>
+                <div class="video-cell" id="cell1">
+                    <video id="video1" class="video-player" autoplay muted></video>
+                    <div class="video-overlay">
+                        <span class="video-title" id="title1"></span>
+                    </div>
+                </div>
+                <div class="video-cell" id="cell2">
+                    <video id="video2" class="video-player" autoplay muted></video>
+                    <div class="video-overlay">
+                        <span class="video-title" id="title2"></span>
+                    </div>
+                </div>
+                <div class="video-cell" id="cell3">
+                    <video id="video3" class="video-player" autoplay muted></video>
+                    <div class="video-overlay">
+                        <span class="video-title" id="title3"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/multi_play.js"></script>
+</body>
+</html>

@@ -239,6 +239,11 @@ def index():
 def clock_wallpaper():
     return render_template('clock_wallpaper.html')
 
+@app.route('/multi-play')
+@login_required
+def multi_play():
+    return render_template('multi_play.html')
+
 @app.route('/api/change-password', methods=['POST'])
 @login_required
 def change_password():

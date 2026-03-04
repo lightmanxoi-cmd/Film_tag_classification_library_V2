@@ -370,6 +370,7 @@ function clearFilter() {
     
     document.getElementById('currentFilter').style.display = 'none';
     document.getElementById('clockWallpaperBtn').disabled = true;
+    document.getElementById('multiPlayBtn').disabled = true;
     loadVideos(1);
 }
 
@@ -381,6 +382,16 @@ function openClockWallpaper() {
     
     const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
     window.location.href = `/clock-wallpaper?filter=${params}`;
+}
+
+function openMultiPlay() {
+    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+        showToast('请先进行多级筛选');
+        return;
+    }
+    
+    const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
+    window.location.href = `/multi-play?filter=${params}`;
 }
 
 async function searchVideos() {
@@ -793,6 +804,7 @@ async function applyAdvancedFilter() {
     filterContainer.style.display = 'flex';
     
     document.getElementById('clockWallpaperBtn').disabled = false;
+    document.getElementById('multiPlayBtn').disabled = false;
     
     await loadVideosByTagsAdvanced(selectedFilterTagsByCategory);
 }
