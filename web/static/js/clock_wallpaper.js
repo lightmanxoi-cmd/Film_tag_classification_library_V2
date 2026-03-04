@@ -1,4 +1,6 @@
 let videos = [];
+let shuffledIndices = [];
+let currentShuffleIndex = 0;
 let currentVideoIndex = -1;
 let isPlaying = false;
 let currentTime = 0;
@@ -94,6 +96,8 @@ async function loadVideos() {
             videos = result.data.videos;
             videoCount.textContent = `${videos.length} videos`;
             
+            initShuffledIndices();
+            
             loadingScreen.style.display = 'none';
             playerContainer.style.display = 'block';
             
@@ -115,6 +119,18 @@ async function loadVideos() {
     }
 }
 
+function initShuffledIndices() {
+    shuffledIndices = [];
+    for (let i = 0; i < videos.length; i++) {
+        shuffledIndices.push(i);
+    }
+    for (let i = shuffledIndices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+    }
+    currentShuffleIndex = 0;
+}
+
 function playRandomVideo() {
     if (videos.length === 0) return;
     
@@ -127,7 +143,13 @@ function playRandomVideo() {
     }
     
     currentSegment = 0;
-    const randomIndex = Math.floor(Math.random() * videos.length);
+    
+    if (currentShuffleIndex >= shuffledIndices.length) {
+        initShuffledIndices();
+    }
+    
+    const randomIndex = shuffledIndices[currentShuffleIndex];
+    currentShuffleIndex++;
     currentVideoIndex = randomIndex;
     
     const videoData = videos[randomIndex];
