@@ -136,10 +136,6 @@ html, body {
     opacity: 0;
 }
 
-.video-cell:hover .video-overlay {
-    opacity: 1;
-}
-
 .video-title {
     font-size: 0.75rem;
     color: #fff;
@@ -166,10 +162,6 @@ html, body {
 .control-bar.hidden {
     opacity: 0;
     pointer-events: none;
-}
-
-.video-cell:hover .control-bar {
-    opacity: 1;
 }
 
 .ctrl-btn {
