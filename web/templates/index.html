@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#141414">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Video Library - 奈飞风格视频库</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -10,12 +13,20 @@
 </head>
 <body>
     <nav class="navbar">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
+            <span class="hamburger-icon">
+                <span></span>
+                <span></span>
+                <span></span>
+            </span>
+        </button>
         <div class="nav-brand">
             <span class="logo">VIDEO LIBRARY</span>
         </div>
         <div class="nav-actions">
             <button class="advanced-filter-btn" onclick="openAdvancedFilter()">
-                <span>🔍</span> 多级筛选
+                <span class="btn-icon">🔍</span>
+                <span class="btn-text">多级筛选</span>
             </button>
         </div>
         <div class="nav-search">
@@ -25,11 +36,25 @@
         <div class="nav-stats" id="stats">
             <span id="videoCount">0</span> 部视频
         </div>
+        <button class="mobile-search-btn" id="mobileSearchBtn" onclick="toggleMobileSearch()">
+            <span>🔍</span>
+        </button>
     </nav>
 
+    <div class="mobile-search-bar" id="mobileSearchBar">
+        <input type="text" id="mobileSearchInput" placeholder="搜索视频...">
+        <button onclick="mobileSearchVideos()">搜索</button>
+        <button class="close-search-btn" onclick="closeMobileSearch()">✕</button>
+    </div>
+
+    <div class="mobile-overlay" id="mobileOverlay" onclick="closeMobileSidebar()"></div>
+
     <div class="main-container">
-        <aside class="sidebar">
-            <h3 class="sidebar-title">分类导航</h3>
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3 class="sidebar-title">分类导航</h3>
+                <button class="close-sidebar-btn" onclick="closeMobileSidebar()">✕</button>
+            </div>
             <div id="tagTree" class="tag-tree">
                 <div class="loading">加载中...</div>
             </div>
@@ -38,8 +63,10 @@
         <main class="content">
             <div class="current-filter" id="currentFilter" style="display: none;">
                 <span class="filter-label">当前筛选:</span>
-                <span id="filterTags"></span>
-                <button class="clear-filter" onclick="clearFilter()">清除筛选</button>
+                <div class="filter-tags-wrapper">
+                    <span id="filterTags"></span>
+                </div>
+                <button class="clear-filter" onclick="clearFilter()">清除</button>
             </div>
 
             <div class="video-grid" id="videoGrid">

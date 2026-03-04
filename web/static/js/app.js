@@ -3,6 +3,8 @@ let currentTagIds = [];
 let allTags = [];
 let videoPlayer = null;
 let currentVideoPath = '';
+let touchStartX = 0;
+let touchStartY = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
     loadTagTree();
@@ -14,7 +16,150 @@ document.addEventListener('DOMContentLoaded', function() {
             searchVideos();
         }
     });
+    
+    const mobileSearchInput = document.getElementById('mobileSearchInput');
+    if (mobileSearchInput) {
+        mobileSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                mobileSearchVideos();
+            }
+        });
+    }
+    
+    initTouchGestures();
+    
+    initSwipeToClose();
 });
+
+function initTouchGestures() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    
+    document.addEventListener('touchend', function(e) {
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+            const sidebar = document.getElementById('sidebar');
+            const isOpen = sidebar.classList.contains('open');
+            
+            if (diffX > 0 && !isOpen && touchStartX < 30) {
+                openMobileSidebar();
+            } else if (diffX < 0 && isOpen) {
+                closeMobileSidebar();
+            }
+        }
+    }, { passive: true });
+}
+
+function initSwipeToClose() {
+    const modals = document.querySelectorAll('.video-player-modal, .advanced-filter-modal');
+    
+    modals.forEach(modal => {
+        let modalTouchStartY = 0;
+        
+        modal.addEventListener('touchstart', function(e) {
+            modalTouchStartY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        modal.addEventListener('touchend', function(e) {
+            const touchEndY = e.changedTouches[0].clientY;
+            const diffY = touchEndY - modalTouchStartY;
+            
+            if (diffY > 100) {
+                if (modal.id === 'videoModal') {
+                    closeVideoModal();
+                } else if (modal.id === 'advancedFilterModal') {
+                    closeAdvancedFilter();
+                }
+            }
+        }, { passive: true });
+    });
+}
+
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar.classList.contains('open')) {
+        closeMobileSidebar();
+    } else {
+        openMobileSidebar();
+    }
+}
+
+function openMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+    sidebar.classList.add('open');
+    overlay.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobileOverlay');
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+function toggleMobileSearch() {
+    const searchBar = document.getElementById('mobileSearchBar');
+    if (searchBar.classList.contains('show')) {
+        closeMobileSearch();
+    } else {
+        searchBar.classList.add('show');
+        document.getElementById('mobileSearchInput').focus();
+    }
+}
+
+function closeMobileSearch() {
+    const searchBar = document.getElementById('mobileSearchBar');
+    searchBar.classList.remove('show');
+    document.getElementById('mobileSearchInput').value = '';
+}
+
+function mobileSearchVideos() {
+    const keyword = document.getElementById('mobileSearchInput').value.trim();
+    
+    if (!keyword) {
+        loadVideos(1);
+        closeMobileSearch();
+        return;
+    }
+    
+    currentTagIds = [];
+    document.getElementById('currentFilter').style.display = 'none';
+    
+    const container = document.getElementById('videoGrid');
+    container.innerHTML = '<div class="loading">搜索中...</div>';
+    
+    fetch(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`)
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                renderVideos(result.data.videos);
+                renderPagination(result.data);
+                
+                document.getElementById('currentFilter').style.display = 'flex';
+                document.getElementById('filterTags').innerHTML = `
+                    <span class="filter-tag">搜索: "${keyword}"</span>
+                `;
+            }
+            closeMobileSearch();
+        })
+        .catch(error => {
+            console.error('搜索失败:', error);
+            container.innerHTML = '<div class="loading">搜索失败</div>';
+            closeMobileSearch();
+        });
+}
 
 async function loadTagTree() {
     try {
@@ -197,6 +342,7 @@ function filterByTag(tagId, tagName) {
         <span class="filter-tag">${tagName}</span>
     `;
     
+    closeMobileSidebar();
     loadVideos(1);
 }
 
@@ -290,6 +436,8 @@ async function playVideo(videoId, title, tags, filePath) {
                 videoElement.className = 'video-js vjs-big-play-centered vjs-fluid';
                 videoElement.controls = true;
                 videoElement.preload = 'auto';
+                videoElement.setAttribute('playsinline', '');
+                videoElement.setAttribute('webkit-playsinline', '');
                 
                 const playerActions = document.querySelector('.player-actions');
                 playerContainer.insertBefore(videoElement, playerActions);
@@ -319,6 +467,7 @@ async function playVideo(videoId, title, tags, filePath) {
             });
             
             modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
             
             videoPlayer.ready(function() {
                 this.play().catch(function(error) {
@@ -353,12 +502,44 @@ function openLocalFile() {
 function copyFilePath() {
     if (currentVideoPath) {
         navigator.clipboard.writeText(currentVideoPath).then(() => {
-            alert('路径已复制: ' + currentVideoPath);
+            showToast('路径已复制: ' + currentVideoPath);
         }).catch(err => {
             console.error('复制失败:', err);
             prompt('请手动复制路径:', currentVideoPath);
         });
     }
+}
+
+function showToast(message) {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(229, 9, 20, 0.9);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 90%;
+            text-align: center;
+        `;
+        document.body.appendChild(toast);
+    }
+    
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+    }, 3000);
 }
 
 function closeVideoModal() {
@@ -371,11 +552,15 @@ function closeVideoModal() {
     }
     
     modal.classList.remove('show');
+    document.body.style.overflow = '';
 }
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeVideoModal();
+        closeAdvancedFilter();
+        closeMobileSidebar();
+        closeMobileSearch();
     }
 });
 
@@ -397,12 +582,14 @@ let selectedFilterTags = [];
 function openAdvancedFilter() {
     const modal = document.getElementById('advancedFilterModal');
     modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
     renderFilterTags();
 }
 
 function closeAdvancedFilter() {
     const modal = document.getElementById('advancedFilterModal');
     modal.classList.remove('show');
+    document.body.style.overflow = '';
 }
 
 function renderFilterTags() {
@@ -516,7 +703,7 @@ function clearFilterSelection() {
 
 async function applyAdvancedFilter() {
     if (selectedFilterTags.length === 0) {
-        alert('请至少选择一个标签');
+        showToast('请至少选择一个标签');
         return;
     }
     
@@ -579,8 +766,27 @@ async function loadVideosByTags(tagIds, matchAll = false) {
     }
 }
 
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeAdvancedFilter();
+let lastScrollTop = 0;
+const navbar = document.querySelector('.navbar');
+
+window.addEventListener('scroll', function() {
+    if (window.innerWidth <= 768) {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > lastScrollTop && scrollTop > 100) {
+            navbar.style.transform = 'translateY(-100%)';
+        } else {
+            navbar.style.transform = 'translateY(0)';
+        }
+        
+        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+    }
+}, { passive: true });
+
+window.addEventListener('resize', function() {
+    if (window.innerWidth > 768) {
+        closeMobileSidebar();
+        closeMobileSearch();
+        navbar.style.transform = 'translateY(0)';
     }
 });
