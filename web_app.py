@@ -171,24 +171,29 @@ def get_services():
     )
 
 def update_thumbnails():
-    """启动时更新所有视频缩略图"""
+    """启动时检查并生成缺失的视频缩略图"""
     print("=" * 50)
-    print("开始检查视频缩略图...")
+    print("Checking video thumbnails...")
     
     thumbnail_gen = get_thumbnail_generator()
     session = db_manager.session_factory()
     
     try:
-        result = session.execute(text("SELECT id, file_path FROM videos")).fetchall()
-        videos = [(row[0], row[1]) for row in result]
+        result = session.execute(text("SELECT id, file_path, title FROM videos")).fetchall()
+        videos = [(row[0], row[1], row[2]) for row in result]
         
-        print(f"共有 {len(videos)} 个视频")
+        print(f"Total videos: {len(videos)}")
         
-        results = thumbnail_gen.batch_generate(videos, max_workers=2, force=False)
+        missing = thumbnail_gen.get_missing_thumbnails(videos)
         
-        print(f"缩略图生成完成: 成功 {results['success']}, 失败 {results['failed']}, 跳过 {results['skipped']}")
+        if not missing:
+            print("All videos have thumbnails.")
+        else:
+            print(f"Found {len(missing)} videos without thumbnails, generating...")
+            results = thumbnail_gen.batch_generate(missing, max_workers=2, force=False)
+            print(f"Thumbnail generation complete: Success {results['success']}, Failed {results['failed']}")
     except Exception as e:
-        print(f"更新缩略图时出错: {e}")
+        print(f"Error updating thumbnails: {e}")
     finally:
         session.close()
     
@@ -306,13 +311,14 @@ def get_videos_by_tag(tag_id):
         
         videos = []
         for v in result.items:
+            video_title = v.title or os.path.basename(v.file_path)
             videos.append({
                 'id': v.id,
-                'title': v.title or os.path.basename(v.file_path),
+                'title': video_title,
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(v.id)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
             })
         
         return jsonify({
@@ -347,13 +353,14 @@ def get_videos():
         
         videos = []
         for v in result.items:
+            video_title = v.title or os.path.basename(v.file_path)
             videos.append({
                 'id': v.id,
-                'title': v.title or os.path.basename(v.file_path),
+                'title': video_title,
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(v.id)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
             })
         
         return jsonify({
@@ -423,13 +430,14 @@ def get_videos_by_multiple_tags():
         
         videos = []
         for v in result.items:
+            video_title = v.title or os.path.basename(v.file_path)
             videos.append({
                 'id': v.id,
-                'title': v.title or os.path.basename(v.file_path),
+                'title': video_title,
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(v.id)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
             })
         
         return jsonify({
@@ -477,13 +485,14 @@ def get_videos_by_tags_advanced():
         
         videos = []
         for v in result.items:
+            video_title = v.title or os.path.basename(v.file_path)
             videos.append({
                 'id': v.id,
-                'title': v.title or os.path.basename(v.file_path),
+                'title': video_title,
                 'file_path': v.file_path,
                 'duration': v.duration,
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-                'thumbnail': thumbnail_gen.get_thumbnail_url(v.id)
+                'thumbnail': thumbnail_gen.get_thumbnail_url(video_title)
             })
         
         return jsonify({
