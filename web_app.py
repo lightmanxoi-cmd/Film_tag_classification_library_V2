@@ -234,6 +234,11 @@ def logout():
 def index():
     return render_template('index.html')
 
+@app.route('/clock-wallpaper')
+@login_required
+def clock_wallpaper():
+    return render_template('clock_wallpaper.html')
+
 @app.route('/api/change-password', methods=['POST'])
 @login_required
 def change_password():

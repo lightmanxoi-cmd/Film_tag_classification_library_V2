@@ -362,13 +362,25 @@ function filterByTag(tagId, tagName) {
 function clearFilter() {
     currentTagIds = [];
     selectedFilterTags = [];
+    selectedFilterTagsByCategory = {};
     
     document.querySelectorAll('.tag-child').forEach(el => {
         el.classList.remove('active');
     });
     
     document.getElementById('currentFilter').style.display = 'none';
+    document.getElementById('clockWallpaperBtn').disabled = true;
     loadVideos(1);
+}
+
+function openClockWallpaper() {
+    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+        showToast('请先进行多级筛选');
+        return;
+    }
+    
+    const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
+    window.location.href = `/clock-wallpaper?filter=${params}`;
 }
 
 async function searchVideos() {
@@ -779,6 +791,8 @@ async function applyAdvancedFilter() {
     
     filterTagsSpan.innerHTML = filterHtml;
     filterContainer.style.display = 'flex';
+    
+    document.getElementById('clockWallpaperBtn').disabled = false;
     
     await loadVideosByTagsAdvanced(selectedFilterTagsByCategory);
 }
