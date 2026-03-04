@@ -1,0 +1,480 @@
+"""
+自定义样式
+"""
+
+:root {
+    --primary-color: #FF4B4B;
+    --secondary-color: #1E88E5;
+    --success-color: #4CAF50;
+    --warning-color: #FF9800;
+    --danger-color: #F44336;
+    --bg-color: #0E1117;
+    --card-bg: #1A1D24;
+    --text-color: #FAFAFA;
+    --text-secondary: #9E9E9E;
+    --border-color: #2D3748;
+}
+
+.stApp {
+    background-color: var(--bg-color);
+}
+
+.sidebar-header h1 {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 1rem 0;
+    margin: 0;
+}
+
+.sidebar-footer {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+[data-testid="stSidebar"] {
+    background-color: var(--card-bg);
+    border-right: 1px solid var(--border-color);
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] {
+    padding: 0.5rem 0;
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    display: none;
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] > div {
+    gap: 0.25rem;
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] > div > label {
+    background-color: transparent;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] > div > label:hover {
+    background-color: rgba(255, 75, 75, 0.1);
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] > div > label[data-checked="true"] {
+    background-color: rgba(255, 75, 75, 0.2);
+    border-left: 3px solid var(--primary-color);
+}
+
+[data-testid="stSidebar"] [data-testid="stRadio"] > div > label span {
+    color: var(--text-color);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.card {
+    background-color: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.card-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.stat-card {
+    text-align: center;
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.metric-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--card-bg) 0%, rgba(30, 136, 229, 0.1) 100%);
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+}
+
+.metric-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.metric-value {
+    color: var(--text-color);
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.stDataFrame {
+    background-color: var(--card-bg);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.stDataFrame [data-testid="stTable"] {
+    background-color: transparent;
+}
+
+.stDataFrame th {
+    background-color: rgba(255, 75, 75, 0.1);
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.stDataFrame td {
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stDataFrame tr:hover td {
+    background-color: rgba(255, 75, 75, 0.05);
+}
+
+.stButton > button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.5rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    background-color: #FF6B6B;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+.secondary-button > button {
+    background-color: var(--secondary-color);
+}
+
+.secondary-button > button:hover {
+    background-color: #2196F3;
+}
+
+.success-button > button {
+    background-color: var(--success-color);
+}
+
+.success-button > button:hover {
+    background-color: #66BB6A;
+}
+
+.danger-button > button {
+    background-color: var(--danger-color);
+}
+
+.danger-button > button:hover {
+    background-color: #EF5350;
+}
+
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > select,
+.stNumberInput > div > div > input {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 0.5rem;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2);
+}
+
+.stTextInput > div > label,
+.stTextArea > div > label,
+.stSelectbox > div > label,
+.stNumberInput > div > label {
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color);
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--primary-color);
+    display: inline-block;
+}
+
+.tag-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin: 0.25rem;
+    background: linear-gradient(135deg, var(--secondary-color), #1565C0);
+    color: white;
+}
+
+.tag-badge.parent {
+    background: linear-gradient(135deg, var(--primary-color), #D32F2F);
+}
+
+.tag-badge.child {
+    background: linear-gradient(135deg, var(--success-color), #388E3C);
+}
+
+.tree-item {
+    padding: 0.5rem 1rem;
+    margin: 0.25rem 0;
+    border-radius: 0.5rem;
+    background-color: var(--card-bg);
+    border-left: 3px solid var(--primary-color);
+}
+
+.tree-item.child {
+    margin-left: 2rem;
+    border-left-color: var(--success-color);
+}
+
+.toast-success {
+    background-color: var(--success-color);
+    color: white;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+.toast-error {
+    background-color: var(--danger-color);
+    color: white;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--card-bg);
+    padding: 2rem;
+    border-radius: 1rem;
+    max-width: 500px;
+    width: 90%;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    padding-left: 2.5rem;
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.empty-state-text {
+    font-size: 1.1rem;
+}
+
+.progress-bar {
+    height: 8px;
+    border-radius: 4px;
+    background-color: var(--border-color);
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    transition: width 0.3s ease;
+}
+
+[data-testid="stExpander"] {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+}
+
+[data-testid="stExpander"] summary {
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+[data-testid="stCheckbox"] label {
+    color: var(--text-color);
+}
+
+.stAlert {
+    border-radius: 0.5rem;
+}
+
+.stAlert[data-baseweb="notification"] {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    background-color: rgba(255, 75, 75, 0.1);
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    font-size: 0.85rem;
+    margin: 0.25rem;
+}
+
+.chip-remove {
+    margin-left: 0.5rem;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.chip-remove:hover {
+    opacity: 1;
+}
+
+.video-card {
+    background-color: var(--card-bg);
+    border-radius: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.video-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 20px rgba(255, 75, 75, 0.2);
+}
+
+.video-thumbnail {
+    width: 100%;
+    height: 150px;
+    background: linear-gradient(135deg, #1E88E5 0%, #FF4B4B 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 3rem;
+}
+
+.video-info {
+    padding: 1rem;
+}
+
+.video-title {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.video-meta {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.divider {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 1rem 0;
+}
+
+.tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-color);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    z-index: 100;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
