@@ -7,10 +7,14 @@ let hideControlsTimeout = null;
 let clickTimers = [null, null, null, null];
 let lastClickTime = [0, 0, 0, 0];
 let allMuted = true;
+let showClock = true;
 
 const loadingScreen = document.getElementById('loadingScreen');
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');
 const videoCount = document.getElementById('videoCount');
+const clockOverlay = document.getElementById('clockOverlay');
+const clockTime = document.getElementById('clockTime');
+const clockToggleBtn = document.getElementById('clockToggleBtn');
 
 async function fetchWithAuth(url, options = {}) {
     const response = await fetch(url, options);
@@ -74,6 +78,7 @@ async function loadVideos() {
             multiPlayerContainer.style.display = 'block';
             
             startAllPlayers();
+            startClock();
             setupEventListeners();
         } else if (result.success && result.data.videos.length > 0) {
             videos = result.data.videos;
@@ -86,6 +91,7 @@ async function loadVideos() {
             multiPlayerContainer.style.display = 'block';
             
             startAllPlayers();
+            startClock();
             setupEventListeners();
         } else {
             loadingScreen.innerHTML = `
@@ -259,6 +265,29 @@ function toggleAllMute() {
         }
         updateVolumeButton(index);
     });
+}
+
+function toggleClockDisplay() {
+    showClock = !showClock;
+    clockOverlay.classList.toggle('hidden', !showClock);
+    clockToggleBtn.classList.toggle('active', showClock);
+}
+
+function startClock() {
+    const updateClock = () => {
+        const now = new Date();
+        let hours = now.getHours();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const minutesStr = minutes.toString().padStart(2, '0');
+        const secondsStr = seconds.toString().padStart(2, '0');
+        clockTime.textContent = `${hours}:${minutesStr}:${secondsStr}`;
+    };
+    
+    updateClock();
+    setInterval(updateClock, 1000);
 }
 
 function setupEventListeners() {
