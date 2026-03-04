@@ -3,6 +3,7 @@ let players = [];
 let shuffledIndices = [];
 let currentIndices = [0, 0, 0, 0];
 let currentVideoIds = [-1, -1, -1, -1];
+let hideControlsTimeout = null;
 
 const loadingScreen = document.getElementById('loadingScreen');
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');
@@ -305,16 +306,28 @@ function setupEventListeners() {
         }
     });
     
-    let hideTimeout;
     const topBar = document.getElementById('topBar');
     
-    multiPlayerContainer.addEventListener('mousemove', () => {
+    function showAllControls() {
         topBar.classList.remove('hidden');
-        clearTimeout(hideTimeout);
-        hideTimeout = setTimeout(() => {
+        players.forEach(player => {
+            player.cell.querySelector('.control-bar').classList.remove('hidden');
+            player.cell.querySelector('.video-overlay').classList.remove('hidden');
+        });
+        clearTimeout(hideControlsTimeout);
+        hideControlsTimeout = setTimeout(() => {
             topBar.classList.add('hidden');
-        }, 2000);
-    });
+            players.forEach(player => {
+                player.cell.querySelector('.control-bar').classList.add('hidden');
+                player.cell.querySelector('.video-overlay').classList.add('hidden');
+            });
+        }, 1000);
+    }
+    
+    multiPlayerContainer.addEventListener('mousemove', showAllControls);
+    multiPlayerContainer.addEventListener('click', showAllControls);
+    
+    showAllControls();
 }
 
 function goBack() {
