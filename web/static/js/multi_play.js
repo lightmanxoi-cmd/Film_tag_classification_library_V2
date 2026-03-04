@@ -6,6 +6,7 @@ let currentVideoIds = [-1, -1, -1, -1];
 let hideControlsTimeout = null;
 let clickTimers = [null, null, null, null];
 let lastClickTime = [0, 0, 0, 0];
+let allMuted = true;
 
 const loadingScreen = document.getElementById('loadingScreen');
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');
@@ -245,6 +246,21 @@ function updateVolumeButton(playerIndex) {
     }
 }
 
+function toggleAllMute() {
+    allMuted = !allMuted;
+    players.forEach((player, index) => {
+        if (allMuted) {
+            player.video.muted = true;
+            player.volumeSlider.value = 0;
+        } else {
+            player.video.muted = false;
+            player.video.volume = 0.5;
+            player.volumeSlider.value = 0.5;
+        }
+        updateVolumeButton(index);
+    });
+}
+
 function setupEventListeners() {
     players.forEach((player, index) => {
         player.video.addEventListener('ended', () => {
@@ -326,6 +342,8 @@ function setupEventListeners() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             goBack();
+        } else if (e.key.toLowerCase() === 'm') {
+            toggleAllMute();
         }
     });
     
