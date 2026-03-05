@@ -186,6 +186,10 @@ function setupEventListeners() {
     fitModeBtn.addEventListener('click', toggleVideoFitMode);
     progressBar.addEventListener('input', handleSeek);
     
+    progressBar.addEventListener('touchstart', handleProgressTouchStart, { passive: false });
+    progressBar.addEventListener('touchmove', handleProgressTouchMove, { passive: false });
+    progressBar.addEventListener('touchend', handleProgressTouchEnd, { passive: false });
+    
     playerContainer.addEventListener('mousemove', handleMouseMove);
     playerContainer.addEventListener('click', handleMouseMove);
     
@@ -285,6 +289,33 @@ function handleSeek(e) {
     const newTime = parseFloat(e.target.value);
     video.currentTime = newTime;
     currentTime = newTime;
+}
+
+function handleProgressTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = progressBar.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const newTime = percent * duration;
+    progressBar.value = newTime;
+    video.currentTime = newTime;
+    currentTime = newTime;
+}
+
+function handleProgressTouchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = progressBar.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const newTime = percent * duration;
+    progressBar.value = newTime;
+    video.currentTime = newTime;
+    currentTime = newTime;
+    currentTimeEl.textContent = formatTime(newTime);
+}
+
+function handleProgressTouchEnd(e) {
+    e.preventDefault();
 }
 
 function toggleFullscreen() {

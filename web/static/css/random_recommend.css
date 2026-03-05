@@ -357,4 +357,24 @@ html, body {
     .volume-slider {
         width: 60px;
     }
+
+    .progress-bar {
+        height: 8px;
+    }
+
+    .progress-bar::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+        opacity: 1;
+    }
+
+    .progress-bar::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        opacity: 1;
+    }
+
+    .progress-bar-container {
+        padding: 10px 0;
+    }
 }
