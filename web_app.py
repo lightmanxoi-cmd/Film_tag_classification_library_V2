@@ -364,11 +364,15 @@ def get_videos():
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 50, type=int)
         search = request.args.get('search', None)
+        random_order = request.args.get('random', 'true').lower() == 'true'
+        random_seed = request.args.get('seed', None, type=int)
         
         result = video_svc.list_videos(
             page=page,
             page_size=page_size,
-            search=search
+            search=search,
+            random_order=random_order,
+            random_seed=random_seed
         )
         
         thumbnail_gen = get_thumbnail_generator()

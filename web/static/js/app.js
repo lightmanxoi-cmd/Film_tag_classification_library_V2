@@ -5,6 +5,7 @@ let videoPlayer = null;
 let currentVideoPath = '';
 let touchStartX = 0;
 let touchStartY = 0;
+let randomSeed = Date.now();
 
 async function fetchWithAuth(url, options = {}) {
     const response = await fetch(url, options);
@@ -258,7 +259,7 @@ async function loadVideos(page = 1) {
             });
             result = await response.json();
         } else {
-            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50`);
+            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50&random=true&seed=${randomSeed}`);
             result = await response.json();
         }
         
@@ -384,6 +385,7 @@ function clearFilter() {
     currentTagIds = [];
     selectedFilterTags = [];
     selectedFilterTagsByCategory = {};
+    randomSeed = Date.now();
     
     document.querySelectorAll('.tag-child').forEach(el => {
         el.classList.remove('active');

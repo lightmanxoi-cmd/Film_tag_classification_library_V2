@@ -72,7 +72,9 @@ class VideoService:
         self,
         page: int = 1,
         page_size: int = 20,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        random_order: bool = False,
+        random_seed: Optional[int] = None
     ) -> VideoListResponse:
         """获取视频列表"""
         if page < 1:
@@ -83,7 +85,9 @@ class VideoService:
         videos, total = self.video_repo.list_all(
             page=page,
             page_size=page_size,
-            search=search
+            search=search,
+            random_order=random_order,
+            random_seed=random_seed
         )
         
         items = [self._to_response(v) for v in videos]
