@@ -255,6 +255,11 @@ def clock_wallpaper():
 def multi_play():
     return render_template('multi_play.html')
 
+@app.route('/random-recommend')
+@login_required
+def random_recommend():
+    return render_template('random_recommend.html')
+
 @app.route('/api/change-password', methods=['POST'])
 @login_required
 def change_password():
