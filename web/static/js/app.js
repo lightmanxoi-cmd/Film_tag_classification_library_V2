@@ -551,23 +551,6 @@ function getMimeType(ext) {
     return mimeTypes[ext] || 'video/mp4';
 }
 
-function openLocalFile() {
-    if (currentVideoPath) {
-        window.location.href = 'file:///' + currentVideoPath.replace(/\\/g, '/');
-    }
-}
-
-function copyFilePath() {
-    if (currentVideoPath) {
-        navigator.clipboard.writeText(currentVideoPath).then(() => {
-            showToast('路径已复制: ' + currentVideoPath);
-        }).catch(err => {
-            console.error('复制失败:', err);
-            prompt('请手动复制路径:', currentVideoPath);
-        });
-    }
-}
-
 function showToast(message) {
     let toast = document.getElementById('toast');
     if (!toast) {

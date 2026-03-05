@@ -730,15 +730,6 @@ body {
     font-size: 16px;
 }
 
-.local-play-btn {
-    background: rgba(229, 9, 20, 0.2);
-    border-color: #e50914;
-}
-
-.local-play-btn:hover {
-    background: rgba(229, 9, 20, 0.3);
-}
-
 .loading {
     text-align: center;
     padding: 40px;
