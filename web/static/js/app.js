@@ -78,16 +78,47 @@ function initSwipeToClose() {
     
     modals.forEach(modal => {
         let modalTouchStartY = 0;
+        let modalTouchStartX = 0;
+        let isScrolling = false;
+        let touchStartTime = 0;
+        let startScrollTop = 0;
         
         modal.addEventListener('touchstart', function(e) {
             modalTouchStartY = e.touches[0].clientY;
+            modalTouchStartX = e.touches[0].clientX;
+            isScrolling = false;
+            touchStartTime = Date.now();
+            
+            const scrollableContent = modal.querySelector('.filter-modal-body');
+            if (scrollableContent) {
+                startScrollTop = scrollableContent.scrollTop;
+            } else {
+                startScrollTop = 0;
+            }
+        }, { passive: true });
+        
+        modal.addEventListener('touchmove', function(e) {
+            const touchCurrentY = e.touches[0].clientY;
+            const touchCurrentX = e.touches[0].clientX;
+            const diffY = touchCurrentY - modalTouchStartY;
+            const diffX = touchCurrentX - modalTouchStartX;
+            
+            if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
+                isScrolling = true;
+            }
         }, { passive: true });
         
         modal.addEventListener('touchend', function(e) {
+            if (isScrolling) return;
+            
             const touchEndY = e.changedTouches[0].clientY;
             const diffY = touchEndY - modalTouchStartY;
+            const touchDuration = Date.now() - touchStartTime;
             
-            if (diffY > 100) {
+            const scrollableContent = modal.querySelector('.filter-modal-body');
+            const currentScrollTop = scrollableContent ? scrollableContent.scrollTop : 0;
+            
+            if (diffY > 100 && touchDuration < 500 && currentScrollTop === 0 && startScrollTop === 0) {
                 if (modal.id === 'videoModal') {
                     closeVideoModal();
                 } else if (modal.id === 'advancedFilterModal') {
@@ -616,6 +647,21 @@ document.addEventListener('keydown', function(e) {
         closeMobileSidebar();
         closeMobileSearch();
     }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const videoModal = document.getElementById('videoModal');
+    const modalContent = videoModal.querySelector('.modal-content');
+    
+    videoModal.addEventListener('click', function(e) {
+        if (e.target === videoModal) {
+            e.stopPropagation();
+        }
+    });
+    
+    modalContent.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
 });
 
 async function loadStats() {

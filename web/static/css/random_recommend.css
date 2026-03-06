@@ -266,6 +266,44 @@ html, body {
     letter-spacing: 0.5px;
 }
 
+.rewind-btn,
+.forward-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.rewind-btn svg,
+.forward-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.rewind-btn span,
+.forward-btn span {
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.skip-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.skip-indicator.visible {
+    opacity: 1;
+}
+
 .volume-control {
     display: flex;
     align-items: center;

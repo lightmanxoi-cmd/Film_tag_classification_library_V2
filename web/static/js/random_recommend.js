@@ -26,6 +26,8 @@ const progressBar = document.getElementById('progressBar');
 const currentTimeEl = document.getElementById('currentTime');
 const durationEl = document.getElementById('duration');
 const playBtn = document.getElementById('playBtn');
+const rewindBtn = document.getElementById('rewindBtn');
+const forwardBtn = document.getElementById('forwardBtn');
 const skipBtn = document.getElementById('skipBtn');
 const volumeBtn = document.getElementById('volumeBtn');
 const volumeSlider = document.getElementById('volumeSlider');
@@ -179,6 +181,8 @@ function setupEventListeners() {
     video.addEventListener('click', handleVideoClick);
     
     playBtn.addEventListener('click', togglePlay);
+    rewindBtn.addEventListener('click', rewindVideo);
+    forwardBtn.addEventListener('click', forwardVideo);
     skipBtn.addEventListener('click', playRandomVideo);
     volumeBtn.addEventListener('click', toggleMute);
     volumeSlider.addEventListener('input', handleVolumeChange);
@@ -223,6 +227,31 @@ function togglePlay() {
         video.play();
     } else {
         video.pause();
+    }
+}
+
+function rewindVideo() {
+    const newTime = Math.max(0, video.currentTime - 15);
+    video.currentTime = newTime;
+    currentTime = newTime;
+    showSkipIndicator(-15);
+}
+
+function forwardVideo() {
+    const newTime = Math.min(video.duration || 0, video.currentTime + 15);
+    video.currentTime = newTime;
+    currentTime = newTime;
+    showSkipIndicator(15);
+}
+
+function showSkipIndicator(seconds) {
+    const indicator = document.getElementById('skipIndicator');
+    if (indicator) {
+        indicator.textContent = seconds > 0 ? `+${seconds}s` : `${seconds}s`;
+        indicator.classList.add('visible');
+        setTimeout(() => {
+            indicator.classList.remove('visible');
+        }, 500);
     }
 }
 
@@ -411,9 +440,9 @@ function handleKeydown(e) {
         e.preventDefault();
         togglePlay();
     } else if (e.key === 'ArrowRight') {
-        video.currentTime += 10;
+        forwardVideo();
     } else if (e.key === 'ArrowLeft') {
-        video.currentTime -= 10;
+        rewindVideo();
     }
 }
 

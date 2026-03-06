@@ -35,6 +35,8 @@
                 muted
             ></video>
 
+            <div class="skip-indicator" id="skipIndicator"></div>
+
             <div class="controls-overlay" id="controlsOverlay">
                 <div class="video-info">
                     <span class="video-name" id="videoName"></span>
@@ -56,10 +58,24 @@
                 </div>
 
                 <div class="control-buttons">
+                    <button class="control-btn rewind-btn" id="rewindBtn">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z" />
+                        </svg>
+                        <span>15s</span>
+                    </button>
+
                     <button class="control-btn play-btn" id="playBtn">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <path d="M8 5v14l11-7z" />
                         </svg>
+                    </button>
+
+                    <button class="control-btn forward-btn" id="forwardBtn">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
+                        </svg>
+                        <span>15s</span>
                     </button>
 
                     <button class="control-btn skip-btn" id="skipBtn">
