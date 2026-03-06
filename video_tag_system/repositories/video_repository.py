@@ -4,7 +4,7 @@
 import random
 from typing import Optional, List, Tuple
 from sqlalchemy import select, func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from video_tag_system.models.video import Video, VideoCreate, VideoUpdate
 from video_tag_system.models.tag import Tag
@@ -24,6 +24,13 @@ class VideoRepository:
         self.session.flush()
         return video
     
+    def create_batch(self, videos_data: List[VideoCreate]) -> List[Video]:
+        """批量创建视频"""
+        videos = [Video(**data.model_dump()) for data in videos_data]
+        self.session.add_all(videos)
+        self.session.flush()
+        return videos
+    
     def get_by_id(self, video_id: int) -> Optional[Video]:
         """根据ID获取视频"""
         return self.session.get(Video, video_id)
@@ -32,7 +39,7 @@ class VideoRepository:
         """根据ID获取视频（包含标签）"""
         stmt = (
             select(Video)
-            .options(joinedload(Video.tags).joinedload(VideoTag.tag))
+            .options(selectinload(Video.tags).selectinload(VideoTag.tag))
             .where(Video.id == video_id)
         )
         return self.session.execute(stmt).unique().scalar_one_or_none()
@@ -46,6 +53,13 @@ class VideoRepository:
         """根据文件哈希获取视频"""
         stmt = select(Video).where(Video.file_hash == file_hash)
         return self.session.execute(stmt).scalar_one_or_none()
+    
+    def get_by_ids(self, video_ids: List[int]) -> List[Video]:
+        """根据ID列表批量获取视频"""
+        if not video_ids:
+            return []
+        stmt = select(Video).where(Video.id.in_(video_ids))
+        return list(self.session.execute(stmt).scalars().all())
     
     def update(self, video: Video, video_data: VideoUpdate) -> Video:
         """更新视频"""
@@ -67,6 +81,19 @@ class VideoRepository:
             self.delete(video)
             return True
         return False
+    
+    def delete_by_ids(self, video_ids: List[int]) -> int:
+        """批量删除视频"""
+        if not video_ids:
+            return 0
+        stmt = select(Video).where(Video.id.in_(video_ids))
+        videos = self.session.execute(stmt).scalars().all()
+        count = 0
+        for video in videos:
+            self.session.delete(video)
+            count += 1
+        self.session.flush()
+        return count
     
     def list_all(
         self,
@@ -216,3 +243,26 @@ class VideoRepository:
     def count_all(self) -> int:
         """获取视频总数"""
         return self.session.execute(select(func.count(Video.id))).scalar()
+    
+    def count_by_tag_ids(self, tag_ids: List[int], match_all: bool = False) -> int:
+        """根据标签ID统计视频数量"""
+        from video_tag_system.models.video_tag import VideoTag
+        
+        if not tag_ids:
+            return 0
+        
+        if match_all:
+            subquery = (
+                select(VideoTag.video_id)
+                .where(VideoTag.tag_id.in_(tag_ids))
+                .group_by(VideoTag.video_id)
+                .having(func.count(VideoTag.tag_id) == len(tag_ids))
+            )
+            stmt = select(func.count()).select_from(subquery.subquery())
+        else:
+            stmt = (
+                select(func.count(func.distinct(VideoTag.video_id)))
+                .where(VideoTag.tag_id.in_(tag_ids))
+            )
+        
+        return self.session.execute(stmt).scalar()

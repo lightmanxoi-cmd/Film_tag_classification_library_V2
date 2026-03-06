@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, Text, DateTime, Integer, func
+from sqlalchemy import String, Text, DateTime, Integer, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from video_tag_system.core.database import Base
@@ -12,6 +12,13 @@ from video_tag_system.core.database import Base
 class Video(Base):
     """视频ORM模型"""
     __tablename__ = "videos"
+    __table_args__ = (
+        Index('idx_videos_title', 'title'),
+        Index('idx_videos_created_at', 'created_at'),
+        Index('idx_videos_updated_at', 'updated_at'),
+        Index('idx_videos_duration', 'duration'),
+        Index('idx_videos_file_size', 'file_size'),
+    )
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     file_path: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)

@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import DateTime, Integer, ForeignKey, UniqueConstraint, func
+from sqlalchemy import DateTime, Integer, ForeignKey, UniqueConstraint, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,9 @@ class VideoTag(Base):
     __tablename__ = "video_tags"
     __table_args__ = (
         UniqueConstraint("video_id", "tag_id", name="uq_video_tag"),
+        Index('idx_video_tags_video_tag', 'video_id', 'tag_id'),
+        Index('idx_video_tags_tag_video', 'tag_id', 'video_id'),
+        Index('idx_video_tags_created_at', 'created_at'),
     )
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -141,20 +141,27 @@ class VideoTagRepository:
         tag_ids: List[int]
     ) -> int:
         """批量为多个视频添加多个标签"""
-        count = 0
-        for video_id in video_ids:
-            existing_tag_ids = self.list_tag_ids_by_video(video_id)
-            new_tag_ids = set(tag_ids) - existing_tag_ids
-            
-            for tag_id in new_tag_ids:
-                video_tag = VideoTag(video_id=video_id, tag_id=tag_id)
-                self.session.add(video_tag)
-                count += 1
+        if not video_ids or not tag_ids:
+            return 0
         
-        if count > 0:
+        existing_stmt = select(VideoTag).where(
+            VideoTag.video_id.in_(video_ids),
+            VideoTag.tag_id.in_(tag_ids)
+        )
+        existing = self.session.execute(existing_stmt).scalars().all()
+        existing_set = {(vt.video_id, vt.tag_id) for vt in existing}
+        
+        new_video_tags = []
+        for video_id in video_ids:
+            for tag_id in tag_ids:
+                if (video_id, tag_id) not in existing_set:
+                    new_video_tags.append(VideoTag(video_id=video_id, tag_id=tag_id))
+        
+        if new_video_tags:
+            self.session.add_all(new_video_tags)
             self.session.flush()
         
-        return count
+        return len(new_video_tags)
     
     def remove_tags_from_videos(
         self, 

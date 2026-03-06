@@ -3,6 +3,7 @@
 """
 import os
 import shutil
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Optional, Generator, List
 from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import QueuePool, StaticPool
 
 from video_tag_system.core.config import get_settings
 from video_tag_system.exceptions import DatabaseError, BackupError
@@ -28,19 +29,26 @@ class DatabaseManager:
     def __init__(
         self,
         database_url: Optional[str] = None,
-        echo: Optional[bool] = None
+        echo: Optional[bool] = None,
+        pool_size: int = 10,
+        max_overflow: int = 20
     ):
         settings = get_settings()
         self.database_url = database_url or settings.database_url
         self.echo = echo if echo is not None else settings.database_echo
+        self.pool_size = pool_size
+        self.max_overflow = max_overflow
         self._engine: Optional[Engine] = None
         self._session_factory: Optional[sessionmaker] = None
+        self._lock = threading.Lock()
     
     @property
     def engine(self) -> Engine:
         """获取数据库引擎"""
         if self._engine is None:
-            self._engine = self._create_engine()
+            with self._lock:
+                if self._engine is None:
+                    self._engine = self._create_engine()
         return self._engine
     
     def _create_engine(self) -> Engine:
@@ -53,25 +61,36 @@ class DatabaseManager:
             engine_kwargs.update({
                 "connect_args": {
                     "check_same_thread": False,
-                    "timeout": 30,
+                    "timeout": 60,
+                    "isolation_level": None,
                 },
-                "poolclass": StaticPool,
+                "poolclass": QueuePool,
+                "pool_size": self.pool_size,
+                "max_overflow": self.max_overflow,
+                "pool_pre_ping": True,
+                "pool_recycle": 3600,
             })
         
         engine = create_engine(self.database_url, **engine_kwargs)
         
         if self.database_url.startswith("sqlite"):
-            self._enable_foreign_keys(engine)
+            self._enable_sqlite_optimizations(engine)
         
         return engine
     
     @staticmethod
-    def _enable_foreign_keys(engine: Engine) -> None:
-        """为SQLite启用外键约束"""
+    def _enable_sqlite_optimizations(engine: Engine) -> None:
+        """为SQLite启用性能优化（WAL模式、外键约束等）"""
         @event.listens_for(engine, "connect")
         def set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA cache_size=-64000")
+            cursor.execute("PRAGMA busy_timeout=60000")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.execute("PRAGMA mmap_size=268435456")
             cursor.close()
     
     @property

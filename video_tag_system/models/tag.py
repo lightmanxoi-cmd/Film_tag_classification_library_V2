@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, DateTime, Integer, ForeignKey, UniqueConstraint, func
+from sqlalchemy import String, DateTime, Integer, ForeignKey, UniqueConstraint, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from video_tag_system.core.database import Base
@@ -14,6 +14,8 @@ class Tag(Base):
     __tablename__ = "tags"
     __table_args__ = (
         UniqueConstraint("name", "parent_id", name="uq_tag_name_parent"),
+        Index('idx_tags_sort_order', 'sort_order'),
+        Index('idx_tags_name_parent', 'name', 'parent_id'),
     )
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
