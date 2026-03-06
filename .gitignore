@@ -64,3 +64,5 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+video_library.db-shm
+video_library.db-wal
