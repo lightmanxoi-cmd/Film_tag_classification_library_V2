@@ -113,6 +113,38 @@ class VideoPathUpdater:
             'not_found': not_found
         }
     
+    def update_video_paths_batch(self, updates: List[Tuple[int, str]]) -> Tuple[int, List[Tuple[int, str]]]:
+        """
+        批量更新视频路径（单事务）
+        
+        Args:
+            updates: [(video_id, new_path), ...]
+            
+        Returns:
+            (成功数量, 失败列表)
+        """
+        success_count = 0
+        failed = []
+        
+        try:
+            with self.db_manager.get_session() as session:
+                for video_id, new_path in updates:
+                    try:
+                        video = session.get(Video, video_id)
+                        if video:
+                            video.file_path = new_path
+                            success_count += 1
+                        else:
+                            failed.append((video_id, "视频不存在"))
+                    except Exception as e:
+                        failed.append((video_id, str(e)))
+        except Exception as e:
+            if self.verbose:
+                print(f"批量更新事务失败: {e}")
+            return 0, [(vid, str(e)) for vid, _ in updates]
+        
+        return success_count, failed
+    
     def update_video_path(self, video_id: int, new_path: str) -> bool:
         """更新单个视频的路径"""
         try:
@@ -135,6 +167,7 @@ class VideoPathUpdater:
         print(f"未找到的视频列表已导出到: {output_file}")
     
     def run(
+        
         self,
         search_path: str,
         dry_run: bool = False,
@@ -190,6 +223,8 @@ class VideoPathUpdater:
         
         print(f"\n步骤4: {'模拟更新' if dry_run else '更新数据库'}...")
         
+        updates_to_apply = []
+        
         for video_id, title, old_path, new_path in matched:
             if old_path == new_path:
                 self.results['skipped'] += 1
@@ -204,14 +239,24 @@ class VideoPathUpdater:
                     print(f"    旧路径: {old_path}")
                     print(f"    新路径: {new_path}")
             else:
-                if self.update_video_path(video_id, new_path):
-                    self.results['updated'] += 1
-                    if self.verbose:
-                        print(f"  ✓ [ID:{video_id}] {title}")
-                        print(f"    旧: {old_path}")
-                        print(f"    新: {new_path}")
-                else:
-                    self.results['errors'].append((video_id, title))
+                updates_to_apply.append((video_id, new_path, title, old_path))
+        
+        if updates_to_apply and not dry_run:
+            print(f"  正在批量更新 {len(updates_to_apply)} 条记录...")
+            
+            updates = [(vid, path) for vid, path, _, _ in updates_to_apply]
+            success_count, failed = self.update_video_paths_batch(updates)
+            
+            self.results['updated'] = success_count
+            
+            for vid, path, title, old_path in updates_to_apply:
+                if self.verbose:
+                    print(f"  ✓ [ID:{vid}] {title}")
+                    print(f"    旧: {old_path}")
+                    print(f"    新: {path}")
+            
+            for vid, error in failed:
+                self.results['errors'].append((vid, f"错误: {error}"))
         
         self.results['matched'] = matched
         self.results['not_found'] = not_found

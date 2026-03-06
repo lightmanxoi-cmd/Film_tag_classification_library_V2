@@ -51,7 +51,10 @@ class DatabaseManager:
         
         if self.database_url.startswith("sqlite"):
             engine_kwargs.update({
-                "connect_args": {"check_same_thread": False},
+                "connect_args": {
+                    "check_same_thread": False,
+                    "timeout": 30,
+                },
                 "poolclass": StaticPool,
             })
         
@@ -59,30 +62,16 @@ class DatabaseManager:
         
         if self.database_url.startswith("sqlite"):
             self._enable_foreign_keys(engine)
-            self._optimize_sqlite(engine)
         
         return engine
     
     @staticmethod
     def _enable_foreign_keys(engine: Engine) -> None:
-        """为 SQLite 启用外键约束"""
+        """为SQLite启用外键约束"""
         @event.listens_for(engine, "connect")
         def set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-    
-    @staticmethod
-    def _optimize_sqlite(engine: Engine) -> None:
-        """优化 SQLite 性能配置"""
-        @event.listens_for(engine, "connect")
-        def set_sqlite_optimizations(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA cache_size=-64000")
-            cursor.execute("PRAGMA temp_store=MEMORY")
-            cursor.execute("PRAGMA busy_timeout=5000")
             cursor.close()
     
     @property
