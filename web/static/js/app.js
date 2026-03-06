@@ -508,7 +508,8 @@ async function playVideo(videoId, title, tags, filePath) {
             document.getElementById('modalTitle').textContent = result.data.title;
             
             const tagsContainer = document.getElementById('modalTags');
-            tagsContainer.innerHTML = tags.map(t => 
+            const childTags = tags.filter(t => t.parent_id);
+            tagsContainer.innerHTML = childTags.map(t => 
                 `<span class="video-tag">${t.name}</span>`
             ).join('');
             
