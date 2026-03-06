@@ -74,12 +74,24 @@ class VideoImporterCLI:
                 update_data = VideoUpdate(title=title)
                 updated_video = video_service.update_video(existing_video.id, update_data)
                 
-                result = video_tag_service.set_video_tags(existing_video.id, tag_ids)
+                # 获取视频现有标签
+                existing_tags = video_tag_service.get_video_tags(existing_video.id)
+                existing_tag_ids = {tag.id for tag in existing_tags}
+                
+                # 只添加新标签，保留原有标签
+                tags_added = 0
+                for tag_id in tag_ids:
+                    if tag_id not in existing_tag_ids:
+                        video_tag_service.add_tag_to_video(existing_video.id, tag_id)
+                        tags_added += 1
+                
+                # 获取更新后的标签列表
+                updated_tags = video_tag_service.get_video_tags(existing_video.id)
                 
                 print(f"✓ 成功更新视频:")
                 print(f"  - 标题: '{existing_video.title}' -> '{updated_video.title}'")
-                print(f"  - 标签: 添加了 {result['tags_added']} 个，移除了 {result['tags_removed']} 个")
-                print(f"  - 当前标签数: {result['current_tag_count']}")
+                print(f"  - 新增标签: {tags_added} 个")
+                print(f"  - 当前标签数: {len(updated_tags)}")
                 
             except VideoNotFoundError:
                 video_data = VideoCreate(
@@ -110,7 +122,53 @@ class VideoImporterCLI:
             if (text[0] == '"' and text[-1] == '"') or (text[0] == "'" and text[-1] == "'"):
                 text = text[1:-1]
         return text.strip()
-    
+
+    def _parse_file_paths(self, input_text: str) -> List[str]:
+        """解析多个文件路径，支持引号包裹的路径和空格分隔"""
+        if not input_text:
+            return []
+
+        paths = []
+        current_path = []
+        in_quotes = False
+        quote_char = None
+
+        i = 0
+        while i < len(input_text):
+            char = input_text[i]
+
+            # 处理引号
+            if char in ('"', "'") and not in_quotes:
+                in_quotes = True
+                quote_char = char
+                i += 1
+                continue
+            elif char == quote_char and in_quotes:
+                in_quotes = False
+                quote_char = None
+                i += 1
+                continue
+
+            # 处理空格（只有在不在引号内时才作为分隔符）
+            if char.isspace() and not in_quotes:
+                if current_path:
+                    path = ''.join(current_path).strip()
+                    if path:
+                        paths.append(self._strip_quotes(path))
+                    current_path = []
+            else:
+                current_path.append(char)
+
+            i += 1
+
+        # 添加最后一个路径
+        if current_path:
+            path = ''.join(current_path).strip()
+            if path:
+                paths.append(self._strip_quotes(path))
+
+        return paths
+
     def _is_video_file(self, filename: str) -> bool:
         """判断文件是否为视频文件"""
         ext = os.path.splitext(filename)[1].lower()
@@ -178,28 +236,40 @@ class VideoImporterCLI:
             try:
                 existing_video = video_service.get_video_by_path(file_path)
                 print(f"检测到已存在的视频: {existing_video.title} (ID: {existing_video.id})")
-                
+
                 update_data = VideoUpdate(title=title)
                 updated_video = video_service.update_video(existing_video.id, update_data)
-                
-                result = video_tag_service.set_video_tags(existing_video.id, tag_ids)
-                
+
+                # 获取视频现有标签
+                existing_tags = video_tag_service.get_video_tags(existing_video.id)
+                existing_tag_ids = {tag.id for tag in existing_tags}
+
+                # 只添加新标签，保留原有标签
+                tags_added = 0
+                for tag_id in tag_ids:
+                    if tag_id not in existing_tag_ids:
+                        video_tag_service.add_tag_to_video(existing_video.id, tag_id)
+                        tags_added += 1
+
+                # 获取更新后的标签列表
+                updated_tags = video_tag_service.get_video_tags(existing_video.id)
+
                 print(f"✓ 成功更新视频:")
                 print(f"  - 标题: '{existing_video.title}' -> '{updated_video.title}'")
-                print(f"  - 标签: 添加了 {result['tags_added']} 个，移除了 {result['tags_removed']} 个")
-                print(f"  - 当前标签数: {result['current_tag_count']}")
-                
+                print(f"  - 新增标签: {tags_added} 个")
+                print(f"  - 当前标签数: {len(updated_tags)}")
+
             except VideoNotFoundError:
                 video_data = VideoCreate(
                     file_path=file_path,
                     title=title
                 )
-                
+
                 video = video_service.create_video(video_data)
-                
+
                 for tag_id in tag_ids:
                     video_tag_service.add_tag_to_video(video.id, tag_id)
-                
+
                 print(f"✓ 成功导入视频:")
                 print(f"  - ID: {video.id}")
                 print(f"  - 标题: {video.title}")
@@ -208,9 +278,9 @@ class VideoImporterCLI:
                 if level2_tag_name:
                     print(f"  - 二级标签: {level2_tag_name}")
                 print(f"  - 标签总数: {len(tag_ids)}")
-        
+
         return True
-    
+
     def import_folder(
         self,
         folder_path: str,
@@ -263,16 +333,16 @@ class VideoImporterCLI:
         print("\n" + "="*60)
         print("视频入库打标签工具")
         print("="*60 + "\n")
-        
+
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
-            
+
             tag_tree = tag_service.get_tag_tree()
-            
+
             if tag_tree.total == 0:
                 print("⚠ 警告: 数据库中没有标签，请先创建标签")
                 return
-            
+
             print("可用标签:")
             for root_tag in tag_tree.items:
                 print(f"  一级: {root_tag.name}")
@@ -280,73 +350,110 @@ class VideoImporterCLI:
                     for child in root_tag.children:
                         print(f"    二级: {child.name}")
             print()
-        
+
         while True:
             try:
                 print("请选择导入模式:")
                 print("  1. 单个文件导入")
                 print("  2. 文件夹批量导入")
                 print("  q. 退出")
-                
+
                 mode = input("\n请输入选项 (1/2/q): ").strip().lower()
-                
+
                 if mode == 'q':
                     print("\n退出程序")
                     break
-                
+
                 if mode not in ['1', '2']:
                     print("✗ 错误: 无效的选项\n")
                     continue
-                
+
+                # 获取文件/文件夹路径
                 if mode == '1':
-                    file_path = input("请输入视频文件路径: ").strip()
-                    file_path = self._strip_quotes(file_path)
-                    
-                    if not file_path:
+                    file_paths_input = input("请输入视频文件路径 (多个路径用空格分隔): ").strip()
+
+                    # 解析多个文件路径（支持引号包裹的路径）
+                    file_paths = self._parse_file_paths(file_paths_input)
+
+                    if not file_paths:
                         print("✗ 错误: 文件路径不能为空\n")
                         continue
-                    
-                    if not os.path.exists(file_path):
-                        print(f"✗ 错误: 文件不存在 '{file_path}'\n")
+
+                    # 验证所有文件路径
+                    valid_files = []
+                    for fp in file_paths:
+                        if not os.path.exists(fp):
+                            print(f"✗ 错误: 文件不存在 '{fp}'")
+                            continue
+                        if os.path.isdir(fp):
+                            print(f"✗ 错误: 请输入文件路径，不是文件夹路径 '{fp}'")
+                            continue
+                        valid_files.append(fp)
+
+                    if not valid_files:
+                        print("✗ 没有有效的文件路径\n")
                         continue
-                    
-                    if os.path.isdir(file_path):
-                        print("✗ 错误: 请输入文件路径，不是文件夹路径\n")
-                        continue
+
+                    file_paths = valid_files
                 else:
                     folder_path = input("请输入文件夹路径: ").strip()
                     folder_path = self._strip_quotes(folder_path)
-                    
+
                     if not folder_path:
                         print("✗ 错误: 文件夹路径不能为空\n")
                         continue
-                    
+
                     if not os.path.isdir(folder_path):
                         print(f"✗ 错误: 文件夹不存在 '{folder_path}'\n")
                         continue
-                    
+
                     recursive_input = input("是否递归扫描子文件夹? (y/n, 默认n): ").strip().lower()
                     recursive = recursive_input == 'y'
-                    
+
                     file_path = folder_path
-                
-                level1_tag_name = input("请输入一级标签名称: ").strip()
-                level1_tag_name = self._strip_quotes(level1_tag_name)
-                if not level1_tag_name:
-                    print("✗ 错误: 一级标签不能为空\n")
-                    continue
-                
-                level2_tag_name = input("请输入二级标签名称 (可选，直接回车跳过): ").strip()
-                level2_tag_name = self._strip_quotes(level2_tag_name)
-                level2_tag_name = level2_tag_name if level2_tag_name else None
-                
-                if mode == '1':
-                    self.import_video(file_path, level1_tag_name, level2_tag_name)
-                else:
-                    self.import_folder(file_path, level1_tag_name, level2_tag_name, recursive)
-                
-                print()
-                
+
+                # 循环为同一文件/文件夹添加多个标签
+                while True:
+                    print("\n" + "-"*40)
+                    if mode == '1':
+                        if len(file_paths) == 1:
+                            print(f"当前文件: {file_paths[0]}")
+                        else:
+                            print(f"当前文件数: {len(file_paths)} 个")
+                            for i, fp in enumerate(file_paths, 1):
+                                print(f"  {i}. {os.path.basename(fp)}")
+                    else:
+                        print(f"当前文件夹: {file_path}")
+                    print("-"*40)
+
+                    level1_tag_name = input("请输入一级标签名称 (输入 'b' 返回上级菜单, 'q' 退出): ").strip()
+                    level1_tag_name = self._strip_quotes(level1_tag_name)
+
+                    if level1_tag_name.lower() == 'q':
+                        print("\n退出程序")
+                        return
+                    if level1_tag_name.lower() == 'b':
+                        print("返回上级菜单...\n")
+                        break
+                    if not level1_tag_name:
+                        print("✗ 错误: 一级标签不能为空\n")
+                        continue
+
+                    level2_tag_name = input("请输入二级标签名称 (可选，直接回车跳过): ").strip()
+                    level2_tag_name = self._strip_quotes(level2_tag_name)
+                    level2_tag_name = level2_tag_name if level2_tag_name else None
+
+                    if mode == '1':
+                        # 为多个文件批量添加相同标签
+                        for i, fp in enumerate(file_paths, 1):
+                            if len(file_paths) > 1:
+                                print(f"\n[{i}/{len(file_paths)}] 处理: {os.path.basename(fp)}")
+                            self.import_video(fp, level1_tag_name, level2_tag_name)
+                    else:
+                        self.import_folder(file_path, level1_tag_name, level2_tag_name, recursive)
+
+                    print()
+
             except KeyboardInterrupt:
                 print("\n\n操作已取消")
                 break
