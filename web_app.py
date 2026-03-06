@@ -497,7 +497,9 @@ def get_videos_by_tags_advanced():
         tags_by_category = data.get('tags_by_category', {})
         page = data.get('page', 1)
         page_size = data.get('page_size', 50)
-        
+        random_order = data.get('random', False)
+        random_seed = data.get('seed', None)
+
         if not tags_by_category:
             return jsonify({
                 'success': True,
@@ -509,11 +511,13 @@ def get_videos_by_tags_advanced():
                     'total_pages': 0
                 }
             })
-        
+
         result = video_svc.list_videos_by_tags_advanced(
             tags_by_category=tags_by_category,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            random_order=random_order,
+            random_seed=random_seed
         )
         
         thumbnail_gen = get_thumbnail_generator()

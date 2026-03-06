@@ -879,12 +879,15 @@ async function shuffleVideos() {
     if (Object.keys(selectedFilterTagsByCategory).length === 0) {
         return;
     }
-    
+
     const shuffleBtn = document.getElementById('shuffleBtn');
     shuffleBtn.classList.add('shuffling');
-    
+
+    // 生成新的随机种子，重新加载所有筛选结果并随机排序
+    randomSeed = Date.now();
+    currentPage = 1;
     await loadVideosByTagsAdvanced(selectedFilterTagsByCategory, true);
-    
+
     setTimeout(() => {
         shuffleBtn.classList.remove('shuffling');
     }, 300);
@@ -893,27 +896,32 @@ async function shuffleVideos() {
 async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">加载中...</div>';
-    
+
     try {
+        const requestBody = {
+            tags_by_category: tagsByCategory,
+            page: currentPage,
+            page_size: 50
+        };
+
+        // 如果需要随机排序，添加随机参数
+        if (shuffle) {
+            requestBody.random = true;
+            requestBody.seed = randomSeed;
+        }
+
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                tags_by_category: tagsByCategory,
-                page: currentPage,
-                page_size: 50
-            })
+            body: JSON.stringify(requestBody)
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
-            let videos = result.data.videos;
-            if (shuffle) {
-                videos = shuffleArray(videos);
-            }
+            const videos = result.data.videos;
             renderVideos(videos);
             renderPagination(result.data);
         }
@@ -921,15 +929,6 @@ async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
         console.error('加载视频失败:', error);
         container.innerHTML = '<div class="loading">加载失败</div>';
     }
-}
-
-function shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
 }
 
 let lastScrollTop = 0;
