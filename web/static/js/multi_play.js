@@ -7,7 +7,7 @@ let hideControlsTimeout = null;
 let clickTimers = [null, null, null, null];
 let lastClickTime = [0, 0, 0, 0];
 let allMuted = true;
-let showClock = true;
+let showClock = false;
 
 const loadingScreen = document.getElementById('loadingScreen');
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');

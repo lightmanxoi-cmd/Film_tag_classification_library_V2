@@ -786,6 +786,47 @@ body {
     color: #fff;
 }
 
+.shuffle-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid #333;
+    color: #e5e5e5;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.shuffle-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.shuffle-btn:hover:not(:disabled) {
+    color: #fff;
+    border-color: #e50914;
+    background: rgba(229, 9, 20, 0.1);
+}
+
+.shuffle-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.shuffle-btn.shuffling {
+    animation: shuffle-spin 0.3s ease;
+}
+
+@keyframes shuffle-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(180deg); }
+}
+
 .clock-wallpaper-btn {
     padding: 8px 16px;
     background: transparent;

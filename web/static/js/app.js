@@ -426,6 +426,7 @@ function clearFilter() {
     document.getElementById('clockWallpaperBtn').disabled = true;
     document.getElementById('multiPlayBtn').disabled = true;
     document.getElementById('randomRecommendBtn').disabled = true;
+    document.getElementById('shuffleBtn').disabled = true;
     loadVideos(1);
 }
 
@@ -869,11 +870,27 @@ async function applyAdvancedFilter() {
     document.getElementById('clockWallpaperBtn').disabled = false;
     document.getElementById('multiPlayBtn').disabled = false;
     document.getElementById('randomRecommendBtn').disabled = false;
+    document.getElementById('shuffleBtn').disabled = false;
     
     await loadVideosByTagsAdvanced(selectedFilterTagsByCategory);
 }
 
-async function loadVideosByTagsAdvanced(tagsByCategory) {
+async function shuffleVideos() {
+    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+        return;
+    }
+    
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    shuffleBtn.classList.add('shuffling');
+    
+    await loadVideosByTagsAdvanced(selectedFilterTagsByCategory, true);
+    
+    setTimeout(() => {
+        shuffleBtn.classList.remove('shuffling');
+    }, 300);
+}
+
+async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">加载中...</div>';
     
@@ -893,13 +910,26 @@ async function loadVideosByTagsAdvanced(tagsByCategory) {
         const result = await response.json();
         
         if (result.success) {
-            renderVideos(result.data.videos);
+            let videos = result.data.videos;
+            if (shuffle) {
+                videos = shuffleArray(videos);
+            }
+            renderVideos(videos);
             renderPagination(result.data);
         }
     } catch (error) {
         console.error('加载视频失败:', error);
         container.innerHTML = '<div class="loading">加载失败</div>';
     }
+}
+
+function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
 }
 
 let lastScrollTop = 0;

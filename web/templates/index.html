@@ -25,6 +25,11 @@
         </div>
         <div class="nav-actions">
             <button class="advanced-filter-btn" onclick="openAdvancedFilter()">多级筛选</button>
+            <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleVideos()" disabled title="随机排列">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+                </svg>
+            </button>
             <button class="clock-wallpaper-btn" id="clockWallpaperBtn" onclick="openClockWallpaper()" disabled>时钟壁纸</button>
             <button class="multi-play-btn" id="multiPlayBtn" onclick="openMultiPlay()" disabled>多路同播</button>
             <button class="random-recommend-btn" id="randomRecommendBtn" onclick="openRandomRecommend()" disabled>随机推荐</button>
