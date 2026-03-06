@@ -94,26 +94,18 @@ class VideoRepository:
         
         if random_order and random_seed is not None:
             random.seed(random_seed)
-            all_ids_stmt = select(Video.id)
-            if search:
-                all_ids_stmt = all_ids_stmt.where(search_filter)
-            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
-            random.shuffle(all_ids)
+            seed_offset = random.randint(0, max(0, total - page_size))
             
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
-            page_ids = all_ids[start_idx:end_idx]
-            
-            if not page_ids:
-                return [], total
-            
-            stmt = select(Video).where(Video.id.in_(page_ids))
+            stmt = stmt.order_by(func.abs(func.sin(Video.id + random_seed)))
+            stmt = stmt.offset(seed_offset).limit(page_size)
             videos = list(self.session.execute(stmt).scalars().all())
             
-            id_to_video = {v.id: v for v in videos}
-            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
-            
-            return ordered_videos, total
+            return videos, total
+        elif random_order:
+            stmt = stmt.order_by(func.random())
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            videos = list(self.session.execute(stmt).scalars().all())
+            return videos, total
         else:
             stmt = stmt.order_by(Video.created_at.desc())
             stmt = stmt.offset((page - 1) * page_size).limit(page_size)

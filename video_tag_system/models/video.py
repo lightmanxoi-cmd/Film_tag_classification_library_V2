@@ -10,27 +10,29 @@ from video_tag_system.core.database import Base
 
 
 class Video(Base):
-    """视频ORM模型"""
+    """视频 ORM 模型"""
     __tablename__ = "videos"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     file_path: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     gif_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=func.now(),
-        nullable=False
+        nullable=False,
+        index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=func.now(),
         onupdate=func.now(),
-        nullable=False
+        nullable=False,
+        index=True
     )
     
     tags: Mapped[List["VideoTag"]] = relationship(
