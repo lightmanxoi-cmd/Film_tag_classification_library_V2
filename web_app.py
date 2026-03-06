@@ -19,11 +19,12 @@ from functools import wraps
 
 INACTIVITY_TIMEOUT = 1800
 
-app = Flask(__name__, 
+app = Flask(__name__,
             static_folder='web/static',
             template_folder='web/templates')
 
 app.secret_key = secrets.token_hex(32)
+app.config['DEBUG'] = True
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
