@@ -1,11 +1,14 @@
 """
 奈飞风格视频播放网站 - Flask后端
 包含安全的登录认证系统
+优化：Session管理、缓存机制、内存优化
 """
 import os
 import re
 import secrets
 import time
+import atexit
+import threading
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, send_file, render_template, Response, redirect, url_for, session, g
 from flask_cors import CORS
@@ -14,10 +17,12 @@ from video_tag_system.services.video_service import VideoService
 from video_tag_system.services.tag_service import TagService
 from video_tag_system.services.video_tag_service import VideoTagService
 from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+from video_tag_system.utils.cache import get_cache, CACHE_KEYS, query_cache
 from sqlalchemy import text
 from functools import wraps
 
 INACTIVITY_TIMEOUT = 1800
+CACHE_CLEANUP_INTERVAL = 300
 
 app = Flask(__name__, 
             static_folder='web/static',
@@ -37,6 +42,8 @@ db_manager.create_tables()
 VIDEO_BASE_PATH = "F:\\666"
 
 AUTH_CONFIG_FILE = '.auth_config.json'
+
+_last_cache_cleanup = time.time()
 
 def get_auth_config_path():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), AUTH_CONFIG_FILE)
@@ -138,6 +145,60 @@ auth_config = init_default_password()
 if auth_config.get('session_secret'):
     app.secret_key = auth_config['session_secret']
 
+@app.before_request
+def before_request():
+    g.db_session = None
+    g.video_service = None
+    g.tag_service = None
+    g.video_tag_service = None
+    g.request_start_time = time.time()
+    
+    global _last_cache_cleanup
+    if time.time() - _last_cache_cleanup > CACHE_CLEANUP_INTERVAL:
+        _last_cache_cleanup = time.time()
+        cleaned = query_cache.cleanup_expired()
+        if cleaned > 0:
+            print(f"Cache cleanup: removed {cleaned} expired entries")
+
+@app.teardown_request
+def teardown_request(exception=None):
+    session = getattr(g, 'db_session', None)
+    if session is not None:
+        try:
+            if exception:
+                session.rollback()
+            session.close()
+        except Exception:
+            pass
+
+def get_db_session():
+    if g.db_session is None:
+        g.db_session = db_manager.session_factory()
+    return g.db_session
+
+def get_video_service():
+    if g.video_service is None:
+        g.video_service = VideoService(get_db_session())
+    return g.video_service
+
+def get_tag_service():
+    if g.tag_service is None:
+        g.tag_service = TagService(get_db_session())
+    return g.tag_service
+
+def get_video_tag_service():
+    if g.video_tag_service is None:
+        g.video_tag_service = VideoTagService(get_db_session())
+    return g.video_tag_service
+
+def get_services():
+    return (
+        get_video_service(),
+        get_tag_service(),
+        get_video_tag_service(),
+        get_db_session()
+    )
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -161,25 +222,15 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def get_services():
-    session = db_manager.session_factory()
-    return (
-        VideoService(session),
-        TagService(session),
-        VideoTagService(session),
-        session
-    )
-
 def update_thumbnails():
-    """启动时检查并生成缺失的视频缩略图和GIF预览"""
     print("=" * 50)
     print("Checking video thumbnails and GIF previews...")
     
     thumbnail_gen = get_thumbnail_generator()
-    session = db_manager.session_factory()
+    db_session = db_manager.session_factory()
     
     try:
-        result = session.execute(text("SELECT id, file_path, title, duration FROM videos")).fetchall()
+        result = db_session.execute(text("SELECT id, file_path, title, duration FROM videos")).fetchall()
         videos = [(row[0], row[1], row[2]) for row in result]
         videos_with_duration = [(row[0], row[1], row[2], row[3]) for row in result]
         
@@ -206,7 +257,7 @@ def update_thumbnails():
     except Exception as e:
         print(f"Error updating thumbnails/GIFs: {e}")
     finally:
-        session.close()
+        db_session.close()
     
     print("=" * 50)
 
@@ -288,7 +339,14 @@ def change_password():
 @app.route('/api/tags/tree', methods=['GET'])
 @login_required
 def get_tag_tree():
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    cache = get_cache()
+    cache_key = CACHE_KEYS['tag_tree']
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, video_tag_svc, _ = get_services()
     try:
         tree = tag_svc.get_tag_tree()
         result = []
@@ -314,18 +372,27 @@ def get_tag_tree():
                     'video_count': video_count
                 })
             result.append(tag_data)
-        return jsonify({'success': True, 'data': result})
-    finally:
-        session.close()
+        
+        cache.set(cache_key, result, ttl=120)
+        return jsonify({'success': True, 'data': result, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/tags/<int:tag_id>/videos', methods=['GET'])
 @login_required
 def get_videos_by_tag(tag_id):
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 50, type=int)
+    
+    cache = get_cache()
+    cache_key = f"videos:tag:{tag_id}:page:{page}:size:{page_size}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, video_tag_svc, _ = get_services()
     try:
-        page = request.args.get('page', 1, type=int)
-        page_size = request.args.get('page_size', 50, type=int)
-        
         result = video_svc.list_videos_by_tags(
             tag_ids=[tag_id],
             page=page,
@@ -348,30 +415,37 @@ def get_videos_by_tag(tag_id):
                 'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'videos': videos,
-                'total': result.total,
-                'page': result.page,
-                'page_size': result.page_size,
-                'total_pages': result.total_pages
-            }
-        })
-    finally:
-        session.close()
+        response_data = {
+            'videos': videos,
+            'total': result.total,
+            'page': result.page,
+            'page_size': result.page_size,
+            'total_pages': result.total_pages
+        }
+        
+        cache.set(cache_key, response_data, ttl=60)
+        return jsonify({'success': True, 'data': response_data, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/videos', methods=['GET'])
 @login_required
 def get_videos():
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 50, type=int)
+    search = request.args.get('search', None)
+    random_order = request.args.get('random', 'true').lower() == 'true'
+    random_seed = request.args.get('seed', None, type=int)
+    
+    cache = get_cache()
+    cache_key = f"videos:list:page:{page}:size:{page_size}:search:{search or ''}:random:{random_order}:seed:{random_seed or 0}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, video_tag_svc, _ = get_services()
     try:
-        page = request.args.get('page', 1, type=int)
-        page_size = request.args.get('page_size', 50, type=int)
-        search = request.args.get('search', None)
-        random_order = request.args.get('random', 'true').lower() == 'true'
-        random_seed = request.args.get('seed', None, type=int)
-        
         result = video_svc.list_videos(
             page=page,
             page_size=page_size,
@@ -395,63 +469,78 @@ def get_videos():
                 'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'videos': videos,
-                'total': result.total,
-                'page': result.page,
-                'page_size': result.page_size,
-                'total_pages': result.total_pages
-            }
-        })
-    finally:
-        session.close()
+        response_data = {
+            'videos': videos,
+            'total': result.total,
+            'page': result.page,
+            'page_size': result.page_size,
+            'total_pages': result.total_pages
+        }
+        
+        cache.set(cache_key, response_data, ttl=60)
+        return jsonify({'success': True, 'data': response_data, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/videos/<int:video_id>', methods=['GET'])
 @login_required
 def get_video_detail(video_id):
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    cache = get_cache()
+    cache_key = f"{CACHE_KEYS['video_by_id']}:{video_id}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, _, _, _ = get_services()
     try:
         video = video_svc.get_video(video_id)
-        return jsonify({
-            'success': True,
-            'data': {
-                'id': video.id,
-                'title': video.title or os.path.basename(video.file_path),
-                'file_path': video.file_path,
-                'duration': video.duration,
-                'description': video.description,
-                'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags]
-            }
-        })
-    finally:
-        session.close()
+        response_data = {
+            'id': video.id,
+            'title': video.title or os.path.basename(video.file_path),
+            'file_path': video.file_path,
+            'duration': video.duration,
+            'description': video.description,
+            'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags]
+        }
+        
+        cache.set(cache_key, response_data, ttl=120)
+        return jsonify({'success': True, 'data': response_data, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/videos/by-tags', methods=['POST'])
 @login_required
 def get_videos_by_multiple_tags():
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    data = request.get_json()
+    tag_ids = data.get('tag_ids', [])
+    page = data.get('page', 1)
+    page_size = data.get('page_size', 50)
+    match_all = data.get('match_all', False)
+    
+    if not tag_ids:
+        return jsonify({
+            'success': True,
+            'data': {
+                'videos': [],
+                'total': 0,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': 0
+            }
+        })
+    
+    cache = get_cache()
+    tag_ids_str = ','.join(map(str, sorted(tag_ids)))
+    cache_key = f"videos:by_tags:{tag_ids_str}:page:{page}:size:{page_size}:all:{match_all}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, video_tag_svc, _ = get_services()
     try:
-        data = request.get_json()
-        tag_ids = data.get('tag_ids', [])
-        page = data.get('page', 1)
-        page_size = data.get('page_size', 50)
-        match_all = data.get('match_all', False)
-        
-        if not tag_ids:
-            return jsonify({
-                'success': True,
-                'data': {
-                    'videos': [],
-                    'total': 0,
-                    'page': page,
-                    'page_size': page_size,
-                    'total_pages': 0
-                }
-            })
-        
         result = video_svc.list_videos_by_tags(
             tag_ids=tag_ids,
             page=page,
@@ -474,41 +563,49 @@ def get_videos_by_multiple_tags():
                 'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'videos': videos,
-                'total': result.total,
-                'page': result.page,
-                'page_size': result.page_size,
-                'total_pages': result.total_pages
-            }
-        })
-    finally:
-        session.close()
+        response_data = {
+            'videos': videos,
+            'total': result.total,
+            'page': result.page,
+            'page_size': result.page_size,
+            'total_pages': result.total_pages
+        }
+        
+        cache.set(cache_key, response_data, ttl=60)
+        return jsonify({'success': True, 'data': response_data, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/videos/by-tags-advanced', methods=['POST'])
 @login_required
 def get_videos_by_tags_advanced():
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    data = request.get_json()
+    tags_by_category = data.get('tags_by_category', {})
+    page = data.get('page', 1)
+    page_size = data.get('page_size', 50)
+    
+    if not tags_by_category:
+        return jsonify({
+            'success': True,
+            'data': {
+                'videos': [],
+                'total': 0,
+                'page': page,
+                'page_size': page_size,
+                'total_pages': 0
+            }
+        })
+    
+    cache = get_cache()
+    category_str = str(sorted([(k, sorted(v)) for k, v in tags_by_category.items()]))
+    cache_key = f"videos:advanced:{hash(category_str)}:page:{page}:size:{page_size}"
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, video_tag_svc, _ = get_services()
     try:
-        data = request.get_json()
-        tags_by_category = data.get('tags_by_category', {})
-        page = data.get('page', 1)
-        page_size = data.get('page_size', 50)
-        
-        if not tags_by_category:
-            return jsonify({
-                'success': True,
-                'data': {
-                    'videos': [],
-                    'total': 0,
-                    'page': page,
-                    'page_size': page_size,
-                    'total_pages': 0
-                }
-            })
-        
         result = video_svc.list_videos_by_tags_advanced(
             tags_by_category=tags_by_category,
             page=page,
@@ -530,23 +627,23 @@ def get_videos_by_tags_advanced():
                 'gif': thumbnail_gen.get_gif_url(video_title)
             })
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'videos': videos,
-                'total': result.total,
-                'page': result.page,
-                'page_size': result.page_size,
-                'total_pages': result.total_pages
-            }
-        })
-    finally:
-        session.close()
+        response_data = {
+            'videos': videos,
+            'total': result.total,
+            'page': result.page,
+            'page_size': result.page_size,
+            'total_pages': result.total_pages
+        }
+        
+        cache.set(cache_key, response_data, ttl=60)
+        return jsonify({'success': True, 'data': response_data, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/video/stream/<int:video_id>')
 @login_required
 def serve_video_by_id(video_id):
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    video_svc, _, _, _ = get_services()
     try:
         video = video_svc.get_video(video_id)
         full_path = video.file_path
@@ -601,22 +698,19 @@ def serve_video_by_id(video_id):
                 return response
         
         return send_file(full_path, mimetype=mimetype)
-    finally:
-        session.close()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/video/stream/<int:video_id>')
 @login_required
 def get_video_stream_url(video_id):
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    video_svc, _, _, _ = get_services()
     try:
         video = video_svc.get_video(video_id)
         file_path = video.file_path
         file_ext = os.path.splitext(file_path)[1].lower()
         
         stream_url = f'/video/stream/{video_id}'
-        
-        print(f"Stream URL: {stream_url}")
-        print(f"File extension: {file_ext}")
         
         return jsonify({
             'success': True,
@@ -627,31 +721,78 @@ def get_video_stream_url(video_id):
                 'file_ext': file_ext
             }
         })
-    finally:
-        session.close()
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/stats')
 @login_required
 def get_stats():
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    cache = get_cache()
+    cache_key = CACHE_KEYS['stats']
+    
+    cached_result = cache.get(cache_key)
+    if cached_result is not None:
+        return jsonify({'success': True, 'data': cached_result, 'cached': True})
+    
+    video_svc, tag_svc, _, _ = get_services()
     try:
         video_count = video_svc.count_videos()
         tag_count = tag_svc.count_tags()
         
-        return jsonify({
-            'success': True,
-            'data': {
-                'video_count': video_count,
-                'tag_count': tag_count
-            }
-        })
-    finally:
-        session.close()
+        result = {
+            'video_count': video_count,
+            'tag_count': tag_count
+        }
+        
+        cache.set(cache_key, result, ttl=60)
+        return jsonify({'success': True, 'data': result, 'cached': False})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cache/stats')
+@login_required
+def get_cache_stats():
+    cache = get_cache()
+    thumbnail_gen = get_thumbnail_generator()
+    
+    query_stats = cache.get_stats()
+    thumbnail_stats = thumbnail_gen.get_cache_stats()
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'query_cache': query_stats,
+            'thumbnail_cache': thumbnail_stats
+        }
+    })
+
+@app.route('/api/cache/clear', methods=['POST'])
+@login_required
+def clear_cache():
+    cache = get_cache()
+    cache.clear()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Cache cleared successfully'
+    })
+
+@app.route('/api/cache/invalidate/<key_prefix>', methods=['POST'])
+@login_required
+def invalidate_cache_endpoint(key_prefix):
+    cache = get_cache()
+    count = cache.delete_pattern(key_prefix)
+    
+    return jsonify({
+        'success': True,
+        'message': f'Invalidated {count} cache entries',
+        'count': count
+    })
 
 @app.route('/api/generate-gif/<int:video_id>', methods=['POST'])
 @login_required
 def generate_gif_for_video(video_id):
-    video_svc, tag_svc, video_tag_svc, session = get_services()
+    video_svc, _, _, _ = get_services()
     try:
         video = video_svc.get_video(video_id)
         video_title = video.title or os.path.basename(video.file_path)
@@ -683,11 +824,18 @@ def generate_gif_for_video(video_id):
             'success': False,
             'error': str(e)
         }), 500
-    finally:
-        session.close()
 
 def create_app():
     return app
+
+def cleanup_on_exit():
+    try:
+        query_cache.clear()
+        print("Cache cleared on exit")
+    except Exception:
+        pass
+
+atexit.register(cleanup_on_exit)
 
 if __name__ == '__main__':
     print("=" * 50)
