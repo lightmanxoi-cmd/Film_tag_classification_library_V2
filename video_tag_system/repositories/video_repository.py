@@ -198,10 +198,10 @@ class VideoRepository:
         total = self.session.execute(count_stmt).scalar()
 
         if random_order and random_seed is not None:
-            random.seed(random_seed)
-            seed_offset = random.randint(0, max(0, total - page_size))
-            stmt = stmt.order_by(func.abs(func.sin(Video.id + random_seed)))
-            stmt = stmt.offset(seed_offset).limit(page_size)
+            # 使用基于随机种子的确定性排序
+            # 将id和seed组合后取哈希值作为排序依据
+            stmt = stmt.order_by(func.abs((Video.id * 2654435761 + random_seed) % 2147483647))
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         elif random_order:
             stmt = stmt.order_by(func.random())
             stmt = stmt.offset((page - 1) * page_size).limit(page_size)
