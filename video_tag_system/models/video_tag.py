@@ -11,7 +11,7 @@ from video_tag_system.core.database import Base
 
 
 class VideoTag(Base):
-    """视频 - 标签关联 ORM 模型"""
+    """视频-标签关联ORM模型"""
     __tablename__ = "video_tags"
     __table_args__ = (
         UniqueConstraint("video_id", "tag_id", name="uq_video_tag"),

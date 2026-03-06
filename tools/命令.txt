@@ -1,0 +1,6 @@
+python tag_manager.py create "3D" --parent-name "演员"
+python video_importer.py --interactive
+
+python tools/tag_manager.py create "典藏"
+python tools/tag_manager.py create "典藏" --parent-name "典藏"
+python tools/video_importer.py --interactive

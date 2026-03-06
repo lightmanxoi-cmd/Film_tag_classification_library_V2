@@ -9,8 +9,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Optional, List
 
+from sqlalchemy import select
 from video_tag_system import DatabaseManager
-from video_tag_system.models.video import VideoCreate, VideoUpdate
+from video_tag_system.models.video import Video, VideoCreate, VideoUpdate
 from video_tag_system.services import VideoService, TagService, VideoTagService
 from video_tag_system.exceptions import (
     VideoNotFoundError,
@@ -27,91 +28,6 @@ class VideoImporterCLI:
     def __init__(self, db_url: Optional[str] = None):
         self.db_manager = DatabaseManager(database_url=db_url, echo=False)
         self.db_manager.create_tables()
-    
-    def import_video(
-        self,
-        file_path: str,
-        level1_tag_name: str,
-        level2_tag_name: Optional[str] = None
-    ) -> None:
-        """导入视频到数据库"""
-        if not os.path.exists(file_path):
-            print(f"✗ 错误: 文件不存在 '{file_path}'")
-            sys.exit(1)
-        
-        filename = os.path.basename(file_path)
-        title = os.path.splitext(filename)[0]
-        
-        with self.db_manager.get_session() as session:
-            video_service = VideoService(session)
-            tag_service = TagService(session)
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                level1_tag = tag_service.get_tag_by_name(level1_tag_name, parent_id=None)
-                level1_tag_id = level1_tag.id
-            except TagNotFoundError:
-                print(f"✗ 错误: 一级标签 '{level1_tag_name}' 不存在")
-                sys.exit(1)
-            
-            level2_tag_id = None
-            if level2_tag_name:
-                try:
-                    level2_tag = tag_service.get_tag_by_name(level2_tag_name, parent_id=level1_tag_id)
-                    level2_tag_id = level2_tag.id
-                except TagNotFoundError:
-                    print(f"✗ 错误: 二级标签 '{level2_tag_name}' 不存在 (父标签: {level1_tag_name})")
-                    sys.exit(1)
-            
-            tag_ids = [level1_tag_id]
-            if level2_tag_id:
-                tag_ids.append(level2_tag_id)
-            
-            try:
-                existing_video = video_service.get_video_by_path(file_path)
-                print(f"检测到已存在的视频: {existing_video.title} (ID: {existing_video.id})")
-                
-                update_data = VideoUpdate(title=title)
-                updated_video = video_service.update_video(existing_video.id, update_data)
-                
-                # 获取视频现有标签
-                existing_tags = video_tag_service.get_video_tags(existing_video.id)
-                existing_tag_ids = {tag.id for tag in existing_tags}
-                
-                # 只添加新标签，保留原有标签
-                tags_added = 0
-                for tag_id in tag_ids:
-                    if tag_id not in existing_tag_ids:
-                        video_tag_service.add_tag_to_video(existing_video.id, tag_id)
-                        tags_added += 1
-                
-                # 获取更新后的标签列表
-                updated_tags = video_tag_service.get_video_tags(existing_video.id)
-                
-                print(f"✓ 成功更新视频:")
-                print(f"  - 标题: '{existing_video.title}' -> '{updated_video.title}'")
-                print(f"  - 新增标签: {tags_added} 个")
-                print(f"  - 当前标签数: {len(updated_tags)}")
-                
-            except VideoNotFoundError:
-                video_data = VideoCreate(
-                    file_path=file_path,
-                    title=title
-                )
-                
-                video = video_service.create_video(video_data)
-                
-                for tag_id in tag_ids:
-                    video_tag_service.add_tag_to_video(video.id, tag_id)
-                
-                print(f"✓ 成功导入视频:")
-                print(f"  - ID: {video.id}")
-                print(f"  - 标题: {video.title}")
-                print(f"  - 路径: {video.file_path}")
-                print(f"  - 一级标签: {level1_tag_name}")
-                if level2_tag_name:
-                    print(f"  - 二级标签: {level2_tag_name}")
-                print(f"  - 标签总数: {len(tag_ids)}")
     
     def _strip_quotes(self, text: str) -> str:
         """去除字符串两端的引号"""
@@ -199,8 +115,8 @@ class VideoImporterCLI:
         file_path: str,
         level1_tag_name: str,
         level2_tag_name: Optional[str] = None
-    ) -> None:
-        """导入视频到数据库"""
+    ) -> bool:
+        """导入视频到数据库，根据标题判断是否已存在"""
         if not os.path.exists(file_path):
             print(f"✗ 错误: 文件不存在 '{file_path}'")
             return False
@@ -233,33 +149,33 @@ class VideoImporterCLI:
             if level2_tag_id:
                 tag_ids.append(level2_tag_id)
             
-            try:
-                existing_video = video_service.get_video_by_path(file_path)
-                print(f"检测到已存在的视频: {existing_video.title} (ID: {existing_video.id})")
+            stmt = select(Video).where(Video.title == title)
+            existing_video = session.execute(stmt).scalar_one_or_none()
+            
+            if existing_video:
+                print(f"检测到已存在的视频 (标题匹配): {existing_video.title} (ID: {existing_video.id})")
 
-                update_data = VideoUpdate(title=title)
+                update_data = VideoUpdate(title=title, file_path=file_path)
                 updated_video = video_service.update_video(existing_video.id, update_data)
 
-                # 获取视频现有标签
                 existing_tags = video_tag_service.get_video_tags(existing_video.id)
                 existing_tag_ids = {tag.id for tag in existing_tags}
 
-                # 只添加新标签，保留原有标签
                 tags_added = 0
                 for tag_id in tag_ids:
                     if tag_id not in existing_tag_ids:
                         video_tag_service.add_tag_to_video(existing_video.id, tag_id)
                         tags_added += 1
 
-                # 获取更新后的标签列表
                 updated_tags = video_tag_service.get_video_tags(existing_video.id)
 
                 print(f"✓ 成功更新视频:")
-                print(f"  - 标题: '{existing_video.title}' -> '{updated_video.title}'")
+                print(f"  - 标题: '{existing_video.title}'")
+                print(f"  - 路径: '{file_path}'")
                 print(f"  - 新增标签: {tags_added} 个")
                 print(f"  - 当前标签数: {len(updated_tags)}")
 
-            except VideoNotFoundError:
+            else:
                 video_data = VideoCreate(
                     file_path=file_path,
                     title=title

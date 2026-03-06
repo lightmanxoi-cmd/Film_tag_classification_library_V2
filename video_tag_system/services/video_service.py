@@ -145,20 +145,16 @@ class VideoService:
         self,
         tags_by_category: dict,
         page: int = 1,
-        page_size: int = 20,
-        random_order: bool = False,
-        random_seed: Optional[int] = None
+        page_size: int = 20
     ) -> VideoListResponse:
         """
         高级标签筛选视频
         同一分类下的标签为OR关系，不同分类间为AND关系
-
+        
         Args:
             tags_by_category: {category_id: [tag_id1, tag_id2, ...], ...}
             page: 页码
             page_size: 每页数量
-            random_order: 是否随机排序
-            random_seed: 随机种子，用于可重复的随机序列
         """
         if not tags_by_category:
             return VideoListResponse(
@@ -168,23 +164,21 @@ class VideoService:
                 page_size=page_size,
                 total_pages=0
             )
-
+        
         if page < 1:
             page = 1
         if page_size < 1 or page_size > 100:
             page_size = 20
-
+        
         videos, total = self.video_repo.list_by_tags_advanced(
             tags_by_category=tags_by_category,
             page=page,
-            page_size=page_size,
-            random_order=random_order,
-            random_seed=random_seed
+            page_size=page_size
         )
-
+        
         items = [self._to_response(v) for v in videos]
         total_pages = math.ceil(total / page_size) if total > 0 else 1
-
+        
         return VideoListResponse(
             items=items,
             total=total,

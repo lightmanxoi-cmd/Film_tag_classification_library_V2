@@ -19,12 +19,11 @@ from functools import wraps
 
 INACTIVITY_TIMEOUT = 1800
 
-app = Flask(__name__,
+app = Flask(__name__, 
             static_folder='web/static',
             template_folder='web/templates')
 
 app.secret_key = secrets.token_hex(32)
-app.config['DEBUG'] = True
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -497,9 +496,7 @@ def get_videos_by_tags_advanced():
         tags_by_category = data.get('tags_by_category', {})
         page = data.get('page', 1)
         page_size = data.get('page_size', 50)
-        random_order = data.get('random', False)
-        random_seed = data.get('seed', None)
-
+        
         if not tags_by_category:
             return jsonify({
                 'success': True,
@@ -511,13 +508,11 @@ def get_videos_by_tags_advanced():
                     'total_pages': 0
                 }
             })
-
+        
         result = video_svc.list_videos_by_tags_advanced(
             tags_by_category=tags_by_category,
             page=page,
-            page_size=page_size,
-            random_order=random_order,
-            random_seed=random_seed
+            page_size=page_size
         )
         
         thumbnail_gen = get_thumbnail_generator()

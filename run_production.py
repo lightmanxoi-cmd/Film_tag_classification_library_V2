@@ -64,8 +64,8 @@ def run_production_server(host='0.0.0.0', port=5000, threads=4):
         print(f"   按 Ctrl+C 停止服务器\n")
         
         # 配置生产环境
-        app.config['DEBUG'] = False
-        app.config['TESTING'] = False
+        app.config['DEBUG'] = True
+        app.config['TESTING'] = True
         
         # 启动服务器
         serve(
@@ -117,8 +117,8 @@ def main():
     parser.add_argument(
         '-t', '--threads',
         type=int,
-        default=4,
-        help='工作线程数 (默认: 4)'
+        default=16,
+        help='工作线程数 (默认: 16)'
     )
     
     parser.add_argument(
