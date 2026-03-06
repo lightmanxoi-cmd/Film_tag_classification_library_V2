@@ -327,7 +327,8 @@ function renderVideos(videos) {
         const ext = video.file_path.split('.').pop().toLowerCase();
         const formatClass = ['mkv', 'wmv', 'avi'].includes(ext) ? 'non-native' : '';
         
-        const tagsHtml = video.tags.slice(0, 3).map(t => 
+        const childTags = video.tags.filter(t => t.parent_id);
+        const tagsHtml = childTags.slice(0, 3).map(t => 
             `<span class="video-tag">${t.name}</span>`
         ).join('');
         
