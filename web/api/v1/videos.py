@@ -231,11 +231,44 @@ def get_videos_by_tags_advanced():
     return APIResponse.success(data=response_data, cached=False)
 
 
+VIDEO_STREAM_CHUNK_SIZE = 1024 * 1024
+VIDEO_CACHE_MAX_AGE = 3600
+
+
+def _parse_range_header(range_header: str, file_size: int) -> tuple:
+    start = 0
+    end = file_size - 1
+    
+    match = re.search(r'bytes=(\d+)-(\d*)', range_header)
+    if match:
+        start = int(match.group(1))
+        if match.group(2):
+            end = int(match.group(2))
+        end = min(end, file_size - 1)
+    
+    if start > end or start >= file_size:
+        return None, None
+    
+    return start, end
+
+
+def _generate_chunks(file_path: str, start: int, length: int, chunk_size: int):
+    with open(file_path, 'rb') as f:
+        f.seek(start)
+        remaining = length
+        while remaining > 0:
+            read_size = min(chunk_size, remaining)
+            chunk = f.read(read_size)
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @videos_bp.route('/stream/<int:video_id>')
 @login_required
 @handle_exceptions
 def serve_video_by_id(video_id):
-    """视频流服务"""
     video_svc, _, _, _ = get_services()
     video = video_svc.get_video(video_id)
     full_path = video.file_path
@@ -258,37 +291,33 @@ def serve_video_by_id(video_id):
     range_header = request.headers.get('Range', None)
     
     if range_header:
-        match = re.search(r'bytes=(\d+)-(\d*)', range_header)
-        if match:
-            start = int(match.group(1))
-            end = int(match.group(2)) if match.group(2) else file_size - 1
-            
-            length = end - start + 1
-            
-            def generate():
-                with open(full_path, 'rb') as f:
-                    f.seek(start)
-                    remaining = length
-                    chunk_size = 64 * 1024
-                    while remaining > 0:
-                        chunk = f.read(min(chunk_size, remaining))
-                        if not chunk:
-                            break
-                        remaining -= len(chunk)
-                        yield chunk
-            
-            response = Response(
-                generate(),
-                206,
-                mimetype=mimetype,
-                direct_passthrough=True
-            )
-            response.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
-            response.headers.add('Accept-Ranges', 'bytes')
-            response.headers.add('Content-Length', str(length))
+        start, end = _parse_range_header(range_header, file_size)
+        
+        if start is None:
+            response = Response(status=416)
+            response.headers.add('Content-Range', f'bytes */{file_size}')
             return response
+        
+        length = end - start + 1
+        
+        response = Response(
+            _generate_chunks(full_path, start, length, VIDEO_STREAM_CHUNK_SIZE),
+            206,
+            mimetype=mimetype,
+            direct_passthrough=True
+        )
+        response.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
+        response.headers.add('Accept-Ranges', 'bytes')
+        response.headers.add('Content-Length', str(length))
+        response.headers.add('Cache-Control', f'public, max-age={VIDEO_CACHE_MAX_AGE}')
+        response.headers.add('X-Content-Type-Options', 'nosniff')
+        return response
     
-    return send_file(full_path, mimetype=mimetype)
+    response = send_file(full_path, mimetype=mimetype)
+    response.headers.add('Accept-Ranges', 'bytes')
+    response.headers.add('Cache-Control', f'public, max-age={VIDEO_CACHE_MAX_AGE}')
+    response.headers.add('X-Content-Type-Options', 'nosniff')
+    return response
 
 
 @videos_bp.route('/<int:video_id>/stream-url', methods=['GET'])
