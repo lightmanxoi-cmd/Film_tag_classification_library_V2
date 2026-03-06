@@ -686,6 +686,9 @@ def generate_gif_for_video(video_id):
     finally:
         session.close()
 
+def create_app():
+    return app
+
 if __name__ == '__main__':
     print("=" * 50)
     print("安全登录系统已启用")
@@ -693,4 +696,25 @@ if __name__ == '__main__':
     print("请登录后及时修改密码！")
     print("=" * 50)
     update_thumbnails()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    try:
+        from waitress import serve
+        print("使用 Waitress 生产服务器启动...")
+        print("访问地址: http://0.0.0.0:5000")
+        print("按 Ctrl+C 停止服务器")
+        print("=" * 50)
+        serve(
+            app,
+            host='0.0.0.0',
+            port=5000,
+            threads=16,
+            connection_limit=200,
+            channel_timeout=300,
+            max_request_body_size=10737418240,
+            cleanup_interval=60
+        )
+    except ImportError:
+        print("警告: waitress 未安装，使用 Flask 开发服务器")
+        print("建议运行: pip install waitress")
+        print("=" * 50)
+        app.run(host='0.0.0.0', port=5000, debug=True)
