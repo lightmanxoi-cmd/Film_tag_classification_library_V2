@@ -238,10 +238,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 示例:
-  python update_video_paths.py "D:\\Videos"
-  python update_video_paths.py "D:\\Videos" --dry-run
-  python update_video_paths.py "D:\\Videos" --filter-missing
-  python update_video_paths.py "D:\\Videos" --export-not-found
+  python tools/update_video_paths.py "D:\\Videos"
+  python tools/update_video_paths.py "D:\\Videos" --dry-run
+  python tools/update_video_paths.py "D:\\Videos" --filter-missing
+  python tools/update_video_paths.py "D:\\Videos" --export-not-found
         '''
     )
     

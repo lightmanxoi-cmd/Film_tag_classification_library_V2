@@ -3,7 +3,7 @@
 """
 import os
 import sys
-from video_importer import VideoImporterCLI
+from .video_importer import VideoImporterCLI
 from video_tag_system import DatabaseManager
 from video_tag_system.services import TagService
 

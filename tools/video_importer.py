@@ -398,13 +398,13 @@ def main():
         cli.import_folder(args.folder, args.level1, args.level2, args.recursive)
     else:
         print("使用方法:")
-        print("  交互式模式: python video_importer.py --interactive")
-        print("  单文件模式: python video_importer.py --file <路径> --level1 <标签> [--level2 <标签>]")
-        print("  文件夹模式: python video_importer.py --folder <路径> --level1 <标签> [--level2 <标签>] [--recursive]")
+        print("  交互式模式: python tools/video_importer.py --interactive")
+        print("  单文件模式: python tools/video_importer.py --file <路径> --level1 <标签> [--level2 <标签>]")
+        print("  文件夹模式: python tools/video_importer.py --folder <路径> --level1 <标签> [--level2 <标签>] [--recursive]")
         print("\n示例:")
-        print("  python video_importer.py --interactive")
-        print("  python video_importer.py --file \"C:\\Videos\\movie.mp4\" --level1 \"电影\" --level2 \"动作\"")
-        print("  python video_importer.py --folder \"C:\\Videos\" --level1 \"电影\" --recursive")
+        print("  python tools/video_importer.py --interactive")
+        print("  python tools/video_importer.py --file \"C:\\Videos\\movie.mp4\" --level1 \"电影\" --level2 \"动作\"")
+        print("  python tools/video_importer.py --folder \"C:\\Videos\" --level1 \"电影\" --recursive")
 
 
 if __name__ == "__main__":

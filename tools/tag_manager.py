@@ -578,65 +578,65 @@ def main():
         epilog="""
 示例:
   创建一级标签:
-    python tag_manager.py create "动作" --desc "动作类型视频"
+    python tools/tag_manager.py create "动作" --desc "动作类型视频"
   
   创建二级标签 (使用父标签ID):
-    python tag_manager.py create "武侠" --parent 1 --desc "武侠动作片"
+    python tools/tag_manager.py create "武侠" --parent 1 --desc "武侠动作片"
   
   创建二级标签 (使用父标签名称):
-    python tag_manager.py create "武侠" --parent-name "动作" --desc "武侠动作片"
+    python tools/tag_manager.py create "武侠" --parent-name "动作" --desc "武侠动作片"
   
   删除标签:
-    python tag_manager.py delete 5
+    python tools/tag_manager.py delete 5
   
   强制删除标签:
-    python tag_manager.py delete 5 --force
+    python tools/tag_manager.py delete 5 --force
   
   重命名标签:
-    python tag_manager.py rename 5 "功夫片"
+    python tools/tag_manager.py rename 5 "功夫片"
   
   改变标签层级:
-    python tag_manager.py move 5 --parent 1
-    python tag_manager.py move 5 --root
+    python tools/tag_manager.py move 5 --parent 1
+    python tools/tag_manager.py move 5 --root
   
   更新标签:
-    python tag_manager.py update 5 --desc "更新后的描述" --sort 10
+    python tools/tag_manager.py update 5 --desc "更新后的描述" --sort 10
   
   合并标签:
-    python tag_manager.py merge 5 6
+    python tools/tag_manager.py merge 5 6
   
   查看标签树:
-    python tag_manager.py list --tree
+    python tools/tag_manager.py list --tree
   
   查看标签详情:
-    python tag_manager.py info 5
+    python tools/tag_manager.py info 5
   
   列出视频:
-    python tag_manager.py videos
+    python tools/tag_manager.py videos
   
   根据标签列出视频:
-    python tag_manager.py videos --tags 1 2
+    python tools/tag_manager.py videos --tags 1 2
   
   为视频添加标签:
-    python tag_manager.py video-add 1 2
+    python tools/tag_manager.py video-add 1 2
   
   从视频移除标签:
-    python tag_manager.py video-remove 1 2
+    python tools/tag_manager.py video-remove 1 2
   
   设置视频标签:
-    python tag_manager.py video-set 1 --tags 1 2 3
+    python tools/tag_manager.py video-set 1 --tags 1 2 3
   
   查看视频标签:
-    python tag_manager.py video-tags 1
+    python tools/tag_manager.py video-tags 1
   
   批量添加标签:
-    python tag_manager.py batch-add --videos 1 2 3 --tags 1 2
+    python tools/tag_manager.py batch-add --videos 1 2 3 --tags 1 2
   
   批量移除标签:
-    python tag_manager.py batch-remove --videos 1 2 3 --tags 1 2
+    python tools/tag_manager.py batch-remove --videos 1 2 3 --tags 1 2
   
   根据标签名搜索视频:
-    python tag_manager.py search "黑丝"
+    python tools/tag_manager.py search "黑丝"
         """
     )
     
