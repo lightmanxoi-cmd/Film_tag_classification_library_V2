@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     )
     
     max_backup_count: int = Field(
-        default=10,
+        default=100,
         description="最大备份数量，超过此数量后自动删除最旧的备份文件"
     )
     
