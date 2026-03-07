@@ -36,10 +36,14 @@ Attributes:
 import os
 import time
 import atexit
+import logging
 from flask import Flask, g
 
 from video_tag_system.core.database import DatabaseManager
+from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
 from video_tag_system.utils.cache import query_cache
+
+logger = logging.getLogger(__name__)
 
 from web.core.config import config
 from web.core.extensions import cors
@@ -352,18 +356,25 @@ def _init_database(app: Flask):
     初始化数据库
     
     创建数据库管理器实例，确保表结构存在。
+    同时初始化每日备份调度器。
     
     Args:
         app: Flask应用实例
     """
-    get_db_manager()
+    db = get_db_manager()
+    
+    try:
+        init_backup_scheduler(db)
+        logger.info("备份调度器初始化完成")
+    except Exception as e:
+        logger.warning(f"备份调度器初始化失败: {e}")
 
 
 def _register_cleanup(app: Flask):
     """
     注册清理函数
     
-    应用退出时清理缓存等资源。
+    应用退出时清理缓存、停止备份调度器等资源。
     
     Args:
         app: Flask应用实例
@@ -372,9 +383,15 @@ def _register_cleanup(app: Flask):
     def cleanup_on_exit():
         """应用退出时的清理函数"""
         try:
+            stop_backup_scheduler()
+            logger.info("备份调度器已停止")
+        except Exception as e:
+            logger.warning(f"停止备份调度器失败: {e}")
+        
+        try:
             query_cache.clear()
-            print("Cache cleared on exit")
-        except Exception:
-            pass
+            logger.info("缓存已清理")
+        except Exception as e:
+            logger.warning(f"清理缓存失败: {e}")
     
     atexit.register(cleanup_on_exit)

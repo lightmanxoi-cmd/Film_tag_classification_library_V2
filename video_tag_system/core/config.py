@@ -64,6 +64,16 @@ class Settings(BaseSettings):
         description="最大备份数量，超过此数量后自动删除最旧的备份文件"
     )
     
+    daily_backup_enabled: bool = Field(
+        default=True,
+        description="是否启用每日自动备份"
+    )
+    
+    daily_backup_time: str = Field(
+        default="03:00",
+        description="每日备份时间，格式为 HH:MM（24小时制）"
+    )
+    
     batch_size: int = Field(
         default=100,
         description="批量操作时的批次大小，影响内存占用和处理速度"
