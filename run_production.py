@@ -8,6 +8,20 @@ import argparse
 from pathlib import Path
 
 
+WAITRESS_CONFIG = {
+    'threads': 16,
+    'connection_limit': 1000,
+    'backlog': 1024,
+    'channel_timeout': 300,
+    'cleanup_interval': 30,
+    'max_request_body_size': 1073741824,
+    'send_bytes': 65536,
+    'outbuf_overflow': 1048576,
+    'inbuf_overflow': 524288,
+    'expose_tracebacks': False,
+}
+
+
 def check_environment():
     """检查生产环境配置"""
     print("=" * 60)
@@ -51,32 +65,41 @@ def check_environment():
     return True
 
 
-def run_production_server(host='0.0.0.0', port=5000, threads=4):
-    """启动生产服务器"""
+def run_production_server(host='0.0.0.0', port=5000, threads=None):
     try:
         from waitress import serve
-        from web_app import app
+        from web_app import create_app
+        
+        app = create_app()
+        
+        actual_threads = threads if threads is not None else WAITRESS_CONFIG['threads']
         
         print(f"\n🚀 启动生产服务器...")
         print(f"   监听地址: {host}:{port}")
-        print(f"   工作线程: {threads}")
+        print(f"   工作线程: {actual_threads}")
+        print(f"   连接限制: {WAITRESS_CONFIG['connection_limit']}")
+        print(f"   发送缓冲: {WAITRESS_CONFIG['send_bytes']} bytes")
         print(f"   访问地址: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
         print(f"   按 Ctrl+C 停止服务器\n")
         
-        # 配置生产环境
-        app.config['DEBUG'] = True
-        app.config['TESTING'] = True
+        config = WAITRESS_CONFIG.copy()
+        if threads is not None:
+            config['threads'] = threads
         
-        # 启动服务器
         serve(
             app,
             host=host,
             port=port,
-            threads=threads,
-            channel_timeout=300,
-            cleanup_interval=30,
-            max_request_body_size=1073741824,  # 1GB
-            expose_tracebacks=False
+            threads=config['threads'],
+            connection_limit=config['connection_limit'],
+            backlog=config['backlog'],
+            channel_timeout=config['channel_timeout'],
+            cleanup_interval=config['cleanup_interval'],
+            max_request_body_size=config['max_request_body_size'],
+            send_bytes=config['send_bytes'],
+            outbuf_overflow=config['outbuf_overflow'],
+            inbuf_overflow=config['inbuf_overflow'],
+            expose_tracebacks=config['expose_tracebacks'],
         )
         
     except ImportError as e:
@@ -117,8 +140,8 @@ def main():
     parser.add_argument(
         '-t', '--threads',
         type=int,
-        default=16,
-        help='工作线程数 (默认: 16)'
+        default=None,
+        help=f'工作线程数 (默认: {WAITRESS_CONFIG["threads"]})'
     )
     
     parser.add_argument(

@@ -1,6 +1,41 @@
 """
 视频缩略图生成模块
-支持内存缓存 + JSON持久化双层缓存
+
+使用FFmpeg为视频文件生成缩略图和GIF预览动画。
+支持内存缓存 + JSON持久化双层缓存机制，提升性能。
+
+主要组件：
+    - ThumbnailCache: 缩略图内存缓存管理器
+    - ThumbnailGenerator: 视频缩略图生成器
+
+功能特点：
+    - 支持生成静态缩略图（JPG格式）
+    - 支持生成动态GIF预览
+    - 多线程批量生成
+    - 自动跳过已存在的缩略图
+    - 智能选择视频中间帧
+
+依赖：
+    - FFmpeg: 用于视频截图和GIF生成
+    - FFprobe: 用于获取视频时长
+
+使用示例：
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    
+    generator = get_thumbnail_generator()
+    
+    # 生成单个缩略图
+    generator.generate_thumbnail("/path/to/video.mp4", "视频标题")
+    
+    # 批量生成
+    videos = [(1, "/path/1.mp4", "标题1"), (2, "/path/2.mp4", "标题2")]
+    results = generator.batch_generate(videos)
+    
+    # 获取缩略图URL
+    url = generator.get_thumbnail_url("视频标题")
+
+Attributes:
+    thumbnail_generator: 全局缩略图生成器实例
 """
 import os
 import subprocess
@@ -14,9 +49,39 @@ from video_tag_system.utils.cache import get_cache, CACHE_KEYS
 
 
 class ThumbnailCache:
-    """缩略图内存缓存管理器"""
+    """
+    缩略图内存缓存管理器
+    
+    维护已生成缩略图和GIF的内存索引，避免重复的文件系统检查。
+    使用线程安全的数据结构，支持并发访问。
+    
+    缓存策略：
+    1. 启动时扫描目录，加载已存在的文件列表
+    2. 生成新文件时更新内存索引
+    3. 支持手动失效特定条目
+    
+    Attributes:
+        _thumbnail_urls: 缩略图URL映射字典
+        _gif_urls: GIF URL映射字典
+        _existing_thumbnails: 已存在的缩略图文件名集合
+        _existing_gifs: 已存在的GIF文件名集合
+        _lock: 可重入锁保证线程安全
+        _initialized: 是否已初始化标记
+    
+    Example:
+        cache = ThumbnailCache()
+        cache.initialize(thumbnail_dir, gif_dir)
+        
+        if cache.has_thumbnail("video_title"):
+            url = cache.get_thumbnail_url("video_title")
+    """
     
     def __init__(self):
+        """
+        初始化缩略图缓存管理器
+        
+        创建空的缓存数据结构，等待initialize()调用。
+        """
         self._thumbnail_urls: Dict[str, str] = {}
         self._gif_urls: Dict[str, str] = {}
         self._existing_thumbnails: Set[str] = set()
@@ -25,6 +90,16 @@ class ThumbnailCache:
         self._initialized = False
     
     def initialize(self, thumbnail_dir: Path, gif_dir: Path):
+        """
+        初始化缓存
+        
+        扫描缩略图和GIF目录，加载已存在的文件列表。
+        使用双重检查锁定避免重复初始化。
+        
+        Args:
+            thumbnail_dir: 缩略图目录路径
+            gif_dir: GIF目录路径
+        """
         if self._initialized:
             return
         
@@ -36,6 +111,15 @@ class ThumbnailCache:
             self._initialized = True
     
     def _scan_existing_files(self, thumbnail_dir: Path, gif_dir: Path):
+        """
+        扫描已存在的文件
+        
+        遍历目录，将所有已存在的缩略图和GIF文件名加入缓存。
+        
+        Args:
+            thumbnail_dir: 缩略图目录路径
+            gif_dir: GIF目录路径
+        """
         if thumbnail_dir.exists():
             for f in thumbnail_dir.iterdir():
                 if f.suffix.lower() in ('.jpg', '.jpeg', '.png'):
@@ -47,39 +131,101 @@ class ThumbnailCache:
                     self._existing_gifs.add(f.stem)
     
     def has_thumbnail(self, safe_title: str) -> bool:
+        """
+        检查缩略图是否存在
+        
+        Args:
+            safe_title: 安全的标题（已清理非法字符）
+        
+        Returns:
+            bool: 缩略图存在返回True
+        """
         with self._lock:
             return safe_title in self._existing_thumbnails
     
     def has_gif(self, safe_title: str) -> bool:
+        """
+        检查GIF是否存在
+        
+        Args:
+            safe_title: 安全的标题（已清理非法字符）
+        
+        Returns:
+            bool: GIF存在返回True
+        """
         with self._lock:
             return safe_title in self._existing_gifs
     
     def add_thumbnail(self, safe_title: str):
+        """
+        添加缩略图到缓存
+        
+        Args:
+            safe_title: 安全的标题
+        """
         with self._lock:
             self._existing_thumbnails.add(safe_title)
     
     def add_gif(self, safe_title: str):
+        """
+        添加GIF到缓存
+        
+        Args:
+            safe_title: 安全的标题
+        """
         with self._lock:
             self._existing_gifs.add(safe_title)
     
     def get_thumbnail_url(self, safe_title: str) -> Optional[str]:
+        """
+        获取缩略图URL
+        
+        Args:
+            safe_title: 安全的标题
+        
+        Returns:
+            Optional[str]: 缩略图URL，不存在返回None
+        """
         with self._lock:
             if safe_title in self._existing_thumbnails:
                 return f"/static/thumbnails/{safe_title}.jpg"
             return None
     
     def get_gif_url(self, safe_title: str) -> Optional[str]:
+        """
+        获取GIF URL
+        
+        Args:
+            safe_title: 安全的标题
+        
+        Returns:
+            Optional[str]: GIF URL，不存在返回None
+        """
         with self._lock:
             if safe_title in self._existing_gifs:
                 return f"/static/gifs/{safe_title}.gif"
             return None
     
     def invalidate(self, safe_title: str):
+        """
+        使缓存失效
+        
+        从缓存中移除指定的缩略图和GIF记录。
+        
+        Args:
+            safe_title: 安全的标题
+        """
         with self._lock:
             self._existing_thumbnails.discard(safe_title)
             self._existing_gifs.discard(safe_title)
     
     def get_stats(self) -> Dict:
+        """
+        获取缓存统计信息
+        
+        Returns:
+            Dict: 包含缓存条目数和初始化状态的字典
+        """
         with self._lock:
             return {
                 "thumbnails_cached": len(self._existing_thumbnails),
@@ -89,7 +235,43 @@ class ThumbnailCache:
 
 
 class ThumbnailGenerator:
-    """视频缩略图生成器"""
+    """
+    视频缩略图生成器
+    
+    使用FFmpeg为视频生成缩略图和GIF预览动画。
+    支持批量生成、自动跳过已存在的文件。
+    
+    生成策略：
+    - 缩略图：从视频第5秒截取一帧（可配置）
+    - GIF：从视频中间位置截取10秒动画
+    
+    性能优化：
+    - 内存缓存避免重复文件检查
+    - JSON持久化记录生成历史
+    - 多线程并行生成
+    
+    Attributes:
+        THUMBNAIL_WIDTH: 缩略图宽度（640像素）
+        THUMBNAIL_HEIGHT: 缩略图高度（360像素）
+        GIF_WIDTH: GIF宽度（320像素）
+        GIF_HEIGHT: GIF高度（180像素）
+        GIF_DURATION: GIF时长（10秒）
+        GIF_FPS: GIF帧率（10帧/秒）
+        thumbnail_dir: 缩略图保存目录
+        gif_dir: GIF保存目录
+        cache_file: 缓存JSON文件路径
+        cache: JSON缓存数据
+        _memory_cache: 内存缓存实例
+    
+    Example:
+        generator = ThumbnailGenerator()
+        
+        # 生成缩略图
+        path = generator.generate_thumbnail("/video.mp4", "标题")
+        
+        # 获取URL
+        url = generator.get_thumbnail_url("标题")
+    """
     
     THUMBNAIL_WIDTH = 640
     THUMBNAIL_HEIGHT = 360
@@ -99,6 +281,15 @@ class ThumbnailGenerator:
     GIF_FPS = 10
     
     def __init__(self, thumbnail_dir: str = "web/static/thumbnails", gif_dir: str = "web/static/gifs"):
+        """
+        初始化缩略图生成器
+        
+        创建保存目录，加载缓存数据，初始化内存缓存。
+        
+        Args:
+            thumbnail_dir: 缩略图保存目录，默认"web/static/thumbnails"
+            gif_dir: GIF保存目录，默认"web/static/gifs"
+        """
         self.thumbnail_dir = Path(thumbnail_dir)
         self.thumbnail_dir.mkdir(parents=True, exist_ok=True)
         self.gif_dir = Path(gif_dir)
@@ -110,6 +301,14 @@ class ThumbnailGenerator:
         self._memory_cache.initialize(self.thumbnail_dir, self.gif_dir)
         
     def _load_cache(self) -> dict:
+        """
+        加载JSON缓存文件
+        
+        从磁盘加载之前生成的缩略图记录。
+        
+        Returns:
+            dict: 缓存数据字典，加载失败返回空字典
+        """
         if self.cache_file.exists():
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
@@ -119,10 +318,30 @@ class ThumbnailGenerator:
         return {}
     
     def _save_cache(self):
+        """
+        保存缓存到JSON文件
+        
+        将当前的缓存数据持久化到磁盘。
+        """
         with open(self.cache_file, 'w', encoding='utf-8') as f:
             json.dump(self.cache, f, ensure_ascii=False, indent=2)
     
     def _sanitize_title(self, title: str) -> str:
+        """
+        清理标题为安全的文件名
+        
+        移除文件名中的非法字符，转换为适合作为文件名的格式。
+        
+        Args:
+            title: 原始标题
+        
+        Returns:
+            str: 安全的文件名
+        
+        Example:
+            >>> _sanitize_title("视频:标题/测试")
+            '视频_标题_测试'
+        """
         if not title:
             return ""
         safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
@@ -131,18 +350,45 @@ class ThumbnailGenerator:
         return safe_title
     
     def _get_thumbnail_path_by_title(self, title: str) -> Path:
+        """
+        根据标题获取缩略图路径
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            Path: 缩略图文件路径，标题为空返回None
+        """
         safe_title = self._sanitize_title(title)
         if safe_title:
             return self.thumbnail_dir / f"{safe_title}.jpg"
         return None
     
     def _get_gif_path_by_title(self, title: str) -> Path:
+        """
+        根据标题获取GIF路径
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            Path: GIF文件路径，标题为空返回None
+        """
         safe_title = self._sanitize_title(title)
         if safe_title:
             return self.gif_dir / f"{safe_title}.gif"
         return None
     
     def has_thumbnail(self, title: str) -> bool:
+        """
+        检查缩略图是否存在
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            bool: 缩略图存在返回True
+        """
         if not title:
             return False
         safe_title = self._sanitize_title(title)
@@ -154,6 +400,31 @@ class ThumbnailGenerator:
         title: str,
         time_offset: float = 5
     ) -> Optional[str]:
+        """
+        生成视频缩略图
+        
+        使用FFmpeg从视频指定时间点截取一帧作为缩略图。
+        自动缩放和填充黑边以保持宽高比。
+        
+        Args:
+            video_path: 视频文件路径
+            title: 视频标题（用于生成文件名）
+            time_offset: 截取时间点（秒），默认5秒
+        
+        Returns:
+            Optional[str]: 生成的缩略图路径，失败返回None
+        
+        FFmpeg参数说明：
+            - -y: 覆盖已存在的文件
+            - -ss: 定位到指定时间点
+            - -vframes 1: 只截取一帧
+            - -vf scale: 缩放滤镜，保持宽高比
+            - -q:v 5: JPEG质量（1-31，越小质量越高）
+        
+        Note:
+            - 需要系统安装FFmpeg
+            - Windows下使用CREATE_NO_WINDOW隐藏命令行窗口
+        """
         if not os.path.exists(video_path):
             print(f"Video file not found: {video_path}")
             return None
@@ -207,6 +478,24 @@ class ThumbnailGenerator:
             return None
     
     def generate_thumbnail_safe(self, video_path: str, title: str) -> Optional[str]:
+        """
+        安全生成缩略图
+        
+        尝试多个时间点生成缩略图，直到成功。
+        时间点顺序：5秒、10秒、3秒、1秒、0.5秒。
+        
+        这种策略可以处理：
+        - 视频开头是黑屏或片头
+        - 视频时长较短
+        - 某些时间点解码失败
+        
+        Args:
+            video_path: 视频文件路径
+            title: 视频标题
+        
+        Returns:
+            Optional[str]: 生成的缩略图路径，全部失败返回None
+        """
         time_offsets = ['5', '10', '3', '1', '0.5']
         
         for offset in time_offsets:
@@ -222,6 +511,31 @@ class ThumbnailGenerator:
         max_workers: int = 4,
         force: bool = False
     ) -> dict:
+        """
+        批量生成缩略图
+        
+        使用线程池并行生成多个视频的缩略图。
+        自动跳过已存在的缩略图（除非force=True）。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title)元组
+            max_workers: 最大并发线程数，默认4
+            force: 是否强制重新生成，默认False
+        
+        Returns:
+            dict: 生成结果统计
+                - success: 成功数量
+                - failed: 失败数量
+                - skipped: 跳过数量
+        
+        Example:
+            videos = [
+                (1, "/path/video1.mp4", "标题1"),
+                (2, "/path/video2.mp4", "标题2"),
+            ]
+            results = generator.batch_generate(videos, max_workers=4)
+            print(f"成功: {results['success']}, 失败: {results['failed']}")
+        """
         results = {'success': 0, 'failed': 0, 'skipped': 0}
         to_process = []
         
@@ -264,6 +578,17 @@ class ThumbnailGenerator:
         return results
     
     def get_thumbnail_url(self, title: str) -> str:
+        """
+        获取缩略图URL
+        
+        返回缩略图的Web访问URL。如果缩略图不存在，返回占位图URL。
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            str: 缩略图URL或占位图URL
+        """
         if not title:
             return "/static/images/placeholder.svg"
         
@@ -283,6 +608,17 @@ class ThumbnailGenerator:
         return "/static/images/placeholder.svg"
     
     def get_missing_thumbnails(self, videos: List[Tuple[int, str, str]]) -> List[Tuple[int, str, str]]:
+        """
+        获取缺少缩略图的视频列表
+        
+        筛选出还没有生成缩略图的视频。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title)元组
+        
+        Returns:
+            List[Tuple[int, str, str]]: 缺少缩略图的视频列表
+        """
         missing = []
         for video_id, file_path, title in videos:
             if not self.has_thumbnail(title):
@@ -290,12 +626,35 @@ class ThumbnailGenerator:
         return missing
     
     def has_gif(self, title: str) -> bool:
+        """
+        检查GIF是否存在
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            bool: GIF存在返回True
+        """
         if not title:
             return False
         safe_title = self._sanitize_title(title)
         return self._memory_cache.has_gif(safe_title)
     
     def get_video_duration(self, video_path: str) -> Optional[float]:
+        """
+        获取视频时长
+        
+        使用FFprobe获取视频的总时长。
+        
+        Args:
+            video_path: 视频文件路径
+        
+        Returns:
+            Optional[float]: 视频时长（秒），失败返回None
+        
+        Note:
+            需要系统安装FFprobe（通常与FFmpeg一起安装）
+        """
         try:
             cmd = [
                 'ffprobe',
@@ -325,6 +684,32 @@ class ThumbnailGenerator:
         title: str,
         duration: int = None
     ) -> Optional[str]:
+        """
+        生成视频GIF预览
+        
+        使用FFmpeg从视频中间位置截取片段生成GIF动画。
+        使用调色板优化GIF质量和大小。
+        
+        Args:
+            video_path: 视频文件路径
+            title: 视频标题（用于生成文件名）
+            duration: 视频时长（秒），None则自动获取
+        
+        Returns:
+            Optional[str]: 生成的GIF路径，失败返回None
+        
+        GIF生成策略：
+            1. 从视频中间位置开始截取
+            2. 截取时长为GIF_DURATION（默认10秒）
+            3. 使用调色板优化颜色
+            4. 帧率为GIF_FPS（默认10帧/秒）
+        
+        FFmpeg滤镜说明：
+            - fps: 设置帧率
+            - scale: 缩放到指定尺寸
+            - palettegen: 生成调色板
+            - paletteuse: 应用调色板
+        """
         if not os.path.exists(video_path):
             print(f"Video file not found: {video_path}")
             return None
@@ -396,6 +781,23 @@ class ThumbnailGenerator:
         max_workers: int = 2,
         force: bool = False
     ) -> dict:
+        """
+        批量生成GIF预览
+        
+        使用线程池并行生成多个视频的GIF预览。
+        GIF生成比缩略图更耗时，建议使用较少的并发线程。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title, duration)元组
+            max_workers: 最大并发线程数，默认2
+            force: 是否强制重新生成，默认False
+        
+        Returns:
+            dict: 生成结果统计
+                - success: 成功数量
+                - failed: 失败数量
+                - skipped: 跳过数量
+        """
         results = {'success': 0, 'failed': 0, 'skipped': 0}
         to_process = []
         
@@ -438,6 +840,17 @@ class ThumbnailGenerator:
         return results
     
     def get_gif_url(self, title: str) -> Optional[str]:
+        """
+        获取GIF URL
+        
+        返回GIF的Web访问URL。如果GIF不存在，返回None。
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            Optional[str]: GIF URL，不存在返回None
+        """
         if not title:
             return None
         
@@ -457,6 +870,17 @@ class ThumbnailGenerator:
         return None
     
     def get_missing_gifs(self, videos: List[Tuple[int, str, str]]) -> List[Tuple[int, str, str]]:
+        """
+        获取缺少GIF的视频列表
+        
+        筛选出还没有生成GIF预览的视频。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title)元组
+        
+        Returns:
+            List[Tuple[int, str, str]]: 缺少GIF的视频列表
+        """
         missing = []
         for video_id, file_path, title in videos:
             if not self.has_gif(title):
@@ -464,6 +888,12 @@ class ThumbnailGenerator:
         return missing
     
     def get_cache_stats(self) -> Dict:
+        """
+        获取缓存统计信息
+        
+        Returns:
+            Dict: 缓存统计信息
+        """
         return self._memory_cache.get_stats()
 
 
@@ -471,4 +901,16 @@ thumbnail_generator = ThumbnailGenerator()
 
 
 def get_thumbnail_generator() -> ThumbnailGenerator:
+    """
+    获取全局缩略图生成器实例
+    
+    返回全局的ThumbnailGenerator实例，用于统一管理缩略图生成。
+    
+    Returns:
+        ThumbnailGenerator: 全局缩略图生成器实例
+    
+    Example:
+        generator = get_thumbnail_generator()
+        generator.generate_thumbnail("/video.mp4", "标题")
+    """
     return thumbnail_generator

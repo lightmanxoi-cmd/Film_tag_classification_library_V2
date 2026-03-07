@@ -1,21 +1,90 @@
+/**
+ * 四分屏视频播放器
+ * 
+ * 本文件实现了一个四分屏同时播放的视频播放器，具有以下特点：
+ * - 同时播放四个视频，每个视频独立控制
+ * - 支持随机播放，避免四个播放器播放同一视频
+ * - 支持单独控制每个播放器的播放、暂停、音量
+ * - 支持全局静音切换
+ * - 支持时钟叠加显示
+ * - 自动隐藏控制栏
+ * 
+ * 主要功能模块：
+ * 1. 视频加载模块：loadVideos、initShuffledIndices、initPlayers
+ * 2. 播放控制模块：playNextVideo、togglePlay、getNextAvailableIndex
+ * 3. 音量控制模块：setVolume、toggleMute、toggleAllMute
+ * 4. 进度控制模块：seekVideo、updateTimeDisplay
+ * 5. 时钟显示模块：startClock、toggleClockDisplay
+ * 
+ * 作者：Video Library System
+ * 创建时间：2024
+ */
+
+/* ==================== 全局变量定义 ==================== */
+
+/** 视频列表数据 */
 let videos = [];
+
+/** 四个播放器实例数组 */
 let players = [];
+
+/** 随机打乱后的视频索引数组 */
 let shuffledIndices = [];
+
+/** 每个播放器当前的随机索引位置 */
 let currentIndices = [0, 0, 0, 0];
+
+/** 每个播放器当前播放的视频ID */
 let currentVideoIds = [-1, -1, -1, -1];
+
+/** 控制栏自动隐藏的定时器 */
 let hideControlsTimeout = null;
+
+/** 每个播放器的单击定时器（用于区分单击和双击） */
 let clickTimers = [null, null, null, null];
+
+/** 每个播放器的上次点击时间 */
 let lastClickTime = [0, 0, 0, 0];
+
+/** 是否全部静音 */
 let allMuted = true;
+
+/** 是否显示时钟 */
 let showClock = false;
 
+/* ==================== DOM 元素引用 ==================== */
+
+/** 加载屏幕元素 */
 const loadingScreen = document.getElementById('loadingScreen');
+
+/** 多播放器容器元素 */
 const multiPlayerContainer = document.getElementById('multiPlayerContainer');
+
+/** 视频数量显示元素 */
 const videoCount = document.getElementById('videoCount');
+
+/** 时钟叠加层元素 */
 const clockOverlay = document.getElementById('clockOverlay');
+
+/** 时钟时间显示元素 */
 const clockTime = document.getElementById('clockTime');
+
+/** 时钟切换按钮 */
 const clockToggleBtn = document.getElementById('clockToggleBtn');
 
+/* ==================== 核心功能函数 ==================== */
+
+/**
+ * 带认证的 fetch 封装
+ * 
+ * 封装原生 fetch，自动处理 401 未授权响应。
+ * 当用户登录过期时，显示提示并跳转到登录页面。
+ * 
+ * @param {string} url - 请求URL
+ * @param {Object} options - fetch 选项
+ * @returns {Promise<Response>} fetch 响应
+ * @throws {Error} 当响应状态为 401 时抛出错误
+ */
 async function fetchWithAuth(url, options = {}) {
     const response = await fetch(url, options);
     if (response.status === 401) {
@@ -29,6 +98,13 @@ async function fetchWithAuth(url, options = {}) {
     return response;
 }
 
+/**
+ * 获取URL参数
+ * 
+ * 从当前页面URL中解析filter参数，用于获取标签筛选条件。
+ * 
+ * @returns {Object|null} 解析后的筛选条件对象，如果不存在则返回null
+ */
 function getUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const filter = params.get('filter');
@@ -43,6 +119,12 @@ function getUrlParams() {
     return null;
 }
 
+/**
+ * 加载视频列表
+ * 
+ * 根据URL参数中的标签筛选条件，从服务器获取视频列表。
+ * 加载成功后初始化四个播放器并开始播放。
+ */
 async function loadVideos() {
     const tagsByCategory = getUrlParams();
     
@@ -108,6 +190,11 @@ async function loadVideos() {
     }
 }
 
+/**
+ * 初始化随机播放索引
+ * 
+ * 创建视频索引数组并使用 Fisher-Yates 算法进行随机打乱。
+ */
 function initShuffledIndices() {
     shuffledIndices = [];
     for (let i = 0; i < videos.length; i++) {
@@ -119,6 +206,11 @@ function initShuffledIndices() {
     }
 }
 
+/**
+ * 初始化四个播放器
+ * 
+ * 为每个播放器获取对应的DOM元素引用，包括视频元素、标题、控制按钮等。
+ */
 function initPlayers() {
     players = [];
     for (let i = 0; i < 4; i++) {
@@ -136,12 +228,28 @@ function initPlayers() {
     }
 }
 
+/**
+ * 启动所有播放器
+ * 
+ * 为四个播放器分别加载并播放第一个视频。
+ */
 function startAllPlayers() {
     for (let i = 0; i < 4; i++) {
         playNextVideo(i);
     }
 }
 
+/* ==================== 视频选择逻辑 ==================== */
+
+/**
+ * 获取下一个可用的视频索引
+ * 
+ * 从随机索引数组中获取下一个视频，确保不与其他播放器正在播放的视频重复。
+ * 如果所有视频都已被播放过，则重新打乱索引数组。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ * @returns {number} 视频在原数组中的索引
+ */
 function getNextAvailableIndex(playerIndex) {
     const otherPlayingIds = currentVideoIds.filter((id, idx) => idx !== playerIndex);
     
@@ -169,6 +277,13 @@ function getNextAvailableIndex(playerIndex) {
     return shuffledIndices[0];
 }
 
+/**
+ * 播放下一个视频
+ * 
+ * 为指定播放器加载并播放下一个视频。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function playNextVideo(playerIndex) {
     if (videos.length === 0) return;
     
@@ -185,6 +300,13 @@ function playNextVideo(playerIndex) {
     player.video.play().catch(() => {});
 }
 
+/* ==================== 播放控制函数 ==================== */
+
+/**
+ * 切换播放/暂停状态
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function togglePlay(playerIndex) {
     const player = players[playerIndex];
     if (player.video.paused) {
@@ -194,6 +316,13 @@ function togglePlay(playerIndex) {
     }
 }
 
+/**
+ * 更新播放按钮图标
+ * 
+ * 根据当前播放状态更新按钮显示的图标（播放或暂停）。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function updatePlayButton(playerIndex) {
     const player = players[playerIndex];
     if (player.video.paused) {
@@ -203,12 +332,29 @@ function updatePlayButton(playerIndex) {
     }
 }
 
+/* ==================== 工具函数 ==================== */
+
+/**
+ * 格式化时间显示
+ * 
+ * 将秒数转换为 分:秒 格式。
+ * 
+ * @param {number} seconds - 时间（秒）
+ * @returns {string} 格式化后的时间字符串
+ */
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+/**
+ * 更新时间显示
+ * 
+ * 更新指定播放器的时间显示（当前时间 / 总时长）。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function updateTimeDisplay(playerIndex) {
     const player = players[playerIndex];
     const current = player.video.currentTime;
@@ -216,12 +362,32 @@ function updateTimeDisplay(playerIndex) {
     player.timeDisplay.textContent = `${formatTime(current)} / ${formatTime(dur)}`;
 }
 
+/* ==================== 进度控制函数 ==================== */
+
+/**
+ * 跳转视频进度
+ * 
+ * 根据进度条百分比值跳转到视频对应位置。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ * @param {number} value - 进度条值（0-100）
+ */
 function seekVideo(playerIndex, value) {
     const player = players[playerIndex];
     const dur = player.video.duration || 0;
     player.video.currentTime = (value / 100) * dur;
 }
 
+/* ==================== 音量控制函数 ==================== */
+
+/**
+ * 设置音量
+ * 
+ * 设置指定播放器的音量值，并更新音量滑块和按钮状态。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ * @param {number} value - 音量值（0-1）
+ */
 function setVolume(playerIndex, value) {
     const player = players[playerIndex];
     player.video.volume = value;
@@ -230,6 +396,14 @@ function setVolume(playerIndex, value) {
     updateVolumeButton(playerIndex);
 }
 
+/**
+ * 切换静音状态
+ * 
+ * 切换指定播放器的静音状态。
+ * 如果当前静音，则恢复音量到0.5；否则静音。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function toggleMute(playerIndex) {
     const player = players[playerIndex];
     if (player.video.muted || player.video.volume === 0) {
@@ -239,6 +413,13 @@ function toggleMute(playerIndex) {
     }
 }
 
+/**
+ * 更新音量按钮图标
+ * 
+ * 根据当前音量和静音状态显示不同的图标。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
+ */
 function updateVolumeButton(playerIndex) {
     const player = players[playerIndex];
     const vol = player.video.muted ? 0 : player.video.volume;
@@ -252,6 +433,11 @@ function updateVolumeButton(playerIndex) {
     }
 }
 
+/**
+ * 切换全部静音
+ * 
+ * 同时切换所有四个播放器的静音状态。
+ */
 function toggleAllMute() {
     allMuted = !allMuted;
     players.forEach((player, index) => {
@@ -267,12 +453,22 @@ function toggleAllMute() {
     });
 }
 
+/* ==================== 时钟显示功能 ==================== */
+
+/**
+ * 切换时钟显示
+ */
 function toggleClockDisplay() {
     showClock = !showClock;
     clockOverlay.classList.toggle('hidden', !showClock);
     clockToggleBtn.classList.toggle('active', showClock);
 }
 
+/**
+ * 启动时钟显示
+ * 
+ * 每秒更新一次时钟显示，使用12小时制格式。
+ */
 function startClock() {
     const updateClock = () => {
         const now = new Date();
@@ -290,6 +486,13 @@ function startClock() {
     setInterval(updateClock, 1000);
 }
 
+/* ==================== 事件监听器设置 ==================== */
+
+/**
+ * 设置所有事件监听器
+ * 
+ * 为四个播放器和控制按钮绑定各种事件处理函数。
+ */
 function setupEventListeners() {
     players.forEach((player, index) => {
         player.video.addEventListener('ended', () => {
@@ -378,6 +581,11 @@ function setupEventListeners() {
     
     const topBar = document.getElementById('topBar');
     
+    /**
+     * 显示所有控制栏
+     * 
+     * 显示顶部栏和每个播放器的控制栏，1秒后自动隐藏。
+     */
     function showAllControls() {
         topBar.classList.remove('hidden');
         players.forEach(player => {
@@ -400,6 +608,11 @@ function setupEventListeners() {
     showAllControls();
 }
 
+/**
+ * 返回上一页
+ * 
+ * 暂停所有播放器并跳转到首页。
+ */
 function goBack() {
     players.forEach(player => {
         player.video.pause();
@@ -408,4 +621,9 @@ function goBack() {
     window.location.href = '/';
 }
 
+/* ==================== 初始化 ==================== */
+
+/**
+ * 页面加载完成后初始化
+ */
 document.addEventListener('DOMContentLoaded', loadVideos);

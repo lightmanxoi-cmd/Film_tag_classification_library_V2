@@ -1,46 +1,164 @@
+/**
+ * 视频时钟壁纸播放器
+ * 
+ * 本文件实现了一个特殊的视频播放模式，具有以下特点：
+ * - 随机播放视频列表中的视频
+ * - 支持时钟叠加显示
+ * - 支持分段浏览模式（将视频分成10段快速预览）
+ * - 支持全屏播放和视频适配模式切换
+ * - 自动隐藏控制栏
+ * 
+ * 主要功能模块：
+ * 1. 视频加载模块：loadVideos、initShuffledIndices
+ * 2. 播放控制模块：playRandomVideo、togglePlay、toggleMute
+ * 3. 分段播放模块：startSegmentPlayback、toggleBrowseMode
+ * 4. UI控制模块：toggleFullscreen、toggleClock、toggleVideoFitMode
+ * 5. 时钟显示模块：startClock
+ * 
+ * 作者：Video Library System
+ * 创建时间：2024
+ */
+
+/* ==================== 全局变量定义 ==================== */
+
+/** 视频列表数据 */
 let videos = [];
+
+/** 随机打乱后的视频索引数组 */
 let shuffledIndices = [];
+
+/** 当前随机播放的索引位置 */
 let currentShuffleIndex = 0;
+
+/** 当前播放的视频在原数组中的索引 */
 let currentVideoIndex = -1;
+
+/** 是否正在播放 */
 let isPlaying = false;
+
+/** 当前播放时间 */
 let currentTime = 0;
+
+/** 视频总时长 */
 let duration = 0;
+
+/** 当前音量值 */
 let volume = 0;
+
+/** 是否静音 */
 let isMuted = true;
+
+/** 是否显示控制栏 */
 let showControls = true;
+
+/** 是否已经开始播放过 */
 let hasStarted = false;
+
+/** 是否正在切换视频 */
 let isSwitchingVideo = false;
+
+/** 是否处于全屏模式 */
 let isFullscreen = false;
+
+/** 是否启用分段浏览模式 */
 let browseMode = false;
+
+/** 当前播放的分段索引（0-9） */
 let currentSegment = 0;
+
+/** 是否显示时钟 */
 let showClock = true;
+
+/** 视频适配模式：cover（填充）或 contain（适应） */
 let videoFitMode = 'cover';
+
+/** 控制栏自动隐藏的定时器 */
 let controlsTimeout = null;
+
+/** 分段播放的定时器 */
 let segmentTimeout = null;
+
+/** 上次点击时间（用于双击检测） */
 let lastClickTime = 0;
 
+/* ==================== DOM 元素引用 ==================== */
+
+/** 视频播放器元素 */
 const video = document.getElementById('videoPlayer');
+
+/** 加载屏幕元素 */
 const loadingScreen = document.getElementById('loadingScreen');
+
+/** 播放器容器元素 */
 const playerContainer = document.getElementById('playerContainer');
+
+/** 时钟叠加层元素 */
 const clockOverlay = document.getElementById('clockOverlay');
+
+/** 时钟时间显示元素 */
 const clockTime = document.getElementById('clockTime');
+
+/** 顶部栏元素 */
 const topBar = document.getElementById('topBar');
+
+/** 控制栏叠加层元素 */
 const controlsOverlay = document.getElementById('controlsOverlay');
+
+/** 视频名称显示元素 */
 const videoName = document.getElementById('videoName');
+
+/** 视频数量显示元素 */
 const videoCount = document.getElementById('videoCount');
+
+/** 进度条元素 */
 const progressBar = document.getElementById('progressBar');
+
+/** 当前时间显示元素 */
 const currentTimeEl = document.getElementById('currentTime');
+
+/** 总时长显示元素 */
 const durationEl = document.getElementById('duration');
+
+/** 播放/暂停按钮 */
 const playBtn = document.getElementById('playBtn');
+
+/** 跳过按钮 */
 const skipBtn = document.getElementById('skipBtn');
+
+/** 音量按钮 */
 const volumeBtn = document.getElementById('volumeBtn');
+
+/** 音量滑块 */
 const volumeSlider = document.getElementById('volumeSlider');
+
+/** 全屏按钮 */
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+/** 时钟切换按钮 */
 const clockToggleBtn = document.getElementById('clockToggleBtn');
+
+/** 视频适配模式按钮 */
 const fitModeBtn = document.getElementById('fitModeBtn');
+
+/** 分段浏览模式按钮 */
 const browseModeBtn = document.getElementById('browseModeBtn');
+
+/** 分段指示器元素 */
 const segmentIndicator = document.getElementById('segmentIndicator');
 
+/* ==================== 核心功能函数 ==================== */
+
+/**
+ * 带认证的 fetch 封装
+ * 
+ * 封装原生 fetch，自动处理 401 未授权响应。
+ * 当用户登录过期时，显示提示并跳转到登录页面。
+ * 
+ * @param {string} url - 请求URL
+ * @param {Object} options - fetch 选项
+ * @returns {Promise<Response>} fetch 响应
+ * @throws {Error} 当响应状态为 401 时抛出错误
+ */
 async function fetchWithAuth(url, options = {}) {
     const response = await fetch(url, options);
     if (response.status === 401) {
@@ -54,6 +172,13 @@ async function fetchWithAuth(url, options = {}) {
     return response;
 }
 
+/**
+ * 获取URL参数
+ * 
+ * 从当前页面URL中解析filter参数，用于获取标签筛选条件。
+ * 
+ * @returns {Object|null} 解析后的筛选条件对象，如果不存在则返回null
+ */
 function getUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const filter = params.get('filter');
@@ -68,6 +193,12 @@ function getUrlParams() {
     return null;
 }
 
+/**
+ * 加载视频列表
+ * 
+ * 根据URL参数中的标签筛选条件，从服务器获取视频列表。
+ * 加载成功后初始化随机播放索引并开始播放第一个视频。
+ */
 async function loadVideos() {
     const tagsByCategory = getUrlParams();
     
@@ -119,6 +250,12 @@ async function loadVideos() {
     }
 }
 
+/**
+ * 初始化随机播放索引
+ * 
+ * 创建视频索引数组并使用 Fisher-Yates 算法进行随机打乱，
+ * 确保每个视频只播放一次后再重新打乱。
+ */
 function initShuffledIndices() {
     shuffledIndices = [];
     for (let i = 0; i < videos.length; i++) {
@@ -131,6 +268,12 @@ function initShuffledIndices() {
     currentShuffleIndex = 0;
 }
 
+/**
+ * 播放随机视频
+ * 
+ * 从随机打乱的索引数组中获取下一个视频并开始播放。
+ * 如果所有视频都已播放，则重新打乱索引数组。
+ */
 function playRandomVideo() {
     if (videos.length === 0) return;
     
@@ -163,6 +306,16 @@ function playRandomVideo() {
     video.load();
 }
 
+/* ==================== 分段播放功能 ==================== */
+
+/**
+ * 启动分段播放模式
+ * 
+ * 将视频分成10个等分段，每段播放6秒后自动跳转到下一段。
+ * 用于快速浏览长视频内容。
+ * 
+ * @param {number} videoDuration - 视频总时长（秒）
+ */
 function startSegmentPlayback(videoDuration) {
     const segmentDuration = videoDuration / 10;
     let currentSeg = 0;
@@ -194,6 +347,13 @@ function startSegmentPlayback(videoDuration) {
     playNextSegment();
 }
 
+/* ==================== 事件监听器设置 ==================== */
+
+/**
+ * 设置所有事件监听器
+ * 
+ * 为视频播放器和控制按钮绑定各种事件处理函数。
+ */
 function setupEventListeners() {
     video.addEventListener('loadedmetadata', () => {
         duration = video.duration;
@@ -262,6 +422,14 @@ function setupEventListeners() {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
 }
 
+/* ==================== 播放控制函数 ==================== */
+
+/**
+ * 处理视频点击事件
+ * 
+ * 实现单击暂停/播放，双击切换全屏或退出。
+ * 在全屏模式下双击会退出并返回上一页。
+ */
 function handleVideoClick() {
     const now = Date.now();
     const timeSinceLastClick = now - lastClickTime;
@@ -283,6 +451,9 @@ function handleVideoClick() {
     togglePlay();
 }
 
+/**
+ * 切换播放/暂停状态
+ */
 function togglePlay() {
     if (video.paused) {
         video.play();
@@ -291,6 +462,11 @@ function togglePlay() {
     }
 }
 
+/**
+ * 更新播放按钮图标
+ * 
+ * 根据当前播放状态更新按钮显示的图标（播放或暂停）。
+ */
 function updatePlayButton() {
     if (isPlaying) {
         playBtn.innerHTML = `
@@ -307,6 +483,13 @@ function updatePlayButton() {
     }
 }
 
+/* ==================== 音量控制函数 ==================== */
+
+/**
+ * 处理音量滑块变化
+ * 
+ * @param {Event} e - input 事件对象
+ */
 function handleVolumeChange(e) {
     volume = parseFloat(e.target.value);
     video.volume = volume;
@@ -317,6 +500,9 @@ function handleVolumeChange(e) {
     updateVolumeButton();
 }
 
+/**
+ * 切换静音状态
+ */
 function toggleMute() {
     isMuted = !isMuted;
     video.muted = isMuted;
@@ -328,6 +514,11 @@ function toggleMute() {
     updateVolumeButton();
 }
 
+/**
+ * 更新音量按钮图标
+ * 
+ * 根据当前音量和静音状态显示不同的图标。
+ */
 function updateVolumeButton() {
     if (isMuted || volume === 0) {
         volumeBtn.innerHTML = `
@@ -350,12 +541,24 @@ function updateVolumeButton() {
     }
 }
 
+/* ==================== 进度控制函数 ==================== */
+
+/**
+ * 处理进度条拖动
+ * 
+ * @param {Event} e - input 事件对象
+ */
 function handleSeek(e) {
     const newTime = parseFloat(e.target.value);
     video.currentTime = newTime;
     currentTime = newTime;
 }
 
+/* ==================== 全屏控制函数 ==================== */
+
+/**
+ * 切换全屏模式
+ */
 function toggleFullscreen() {
     if (!document.fullscreenElement) {
         playerContainer.requestFullscreen();
@@ -367,11 +570,17 @@ function toggleFullscreen() {
     updateFullscreenButton();
 }
 
+/**
+ * 处理全屏状态变化事件
+ */
 function handleFullscreenChange() {
     isFullscreen = !!document.fullscreenElement;
     updateFullscreenButton();
 }
 
+/**
+ * 更新全屏按钮图标
+ */
 function updateFullscreenButton() {
     if (isFullscreen) {
         fullscreenBtn.innerHTML = `
@@ -388,18 +597,34 @@ function updateFullscreenButton() {
     }
 }
 
+/* ==================== 特殊功能切换函数 ==================== */
+
+/**
+ * 切换时钟显示
+ */
 function toggleClock() {
     showClock = !showClock;
     clockOverlay.classList.toggle('hidden', !showClock);
     clockToggleBtn.classList.toggle('active', showClock);
 }
 
+/**
+ * 切换视频适配模式
+ * 
+ * 在 cover（填充裁剪）和 contain（完整显示）模式之间切换。
+ */
 function toggleVideoFitMode() {
     videoFitMode = videoFitMode === 'cover' ? 'contain' : 'cover';
     video.className = `video-player video-fit-${videoFitMode}`;
     fitModeBtn.querySelector('span').textContent = videoFitMode === 'cover' ? 'Cover' : 'Contain';
 }
 
+/**
+ * 切换分段浏览模式
+ * 
+ * 开启后将视频分成10段快速预览，每段播放6秒。
+ * 关闭后恢复正常播放模式。
+ */
 function toggleBrowseMode() {
     browseMode = !browseMode;
     browseModeBtn.classList.toggle('active', browseMode);
@@ -428,6 +653,14 @@ function toggleBrowseMode() {
     }
 }
 
+/* ==================== 控制栏显示控制 ==================== */
+
+/**
+ * 处理鼠标移动事件
+ * 
+ * 显示控制栏并重置自动隐藏定时器。
+ * 在全屏模式下还会临时显示鼠标光标。
+ */
 function handleMouseMove() {
     if (isSwitchingVideo) {
         isSwitchingVideo = false;
@@ -448,6 +681,11 @@ function handleMouseMove() {
     }
 }
 
+/**
+ * 重置控制栏自动隐藏定时器
+ * 
+ * 设置1秒后自动隐藏控制栏（如果正在播放且不在切换视频）。
+ */
 function resetControlsTimeout() {
     if (controlsTimeout) {
         clearTimeout(controlsTimeout);
@@ -467,11 +705,27 @@ function resetControlsTimeout() {
     }, 1000);
 }
 
+/**
+ * 更新控制栏可见性
+ */
 function updateControlsVisibility() {
     topBar.classList.toggle('hidden', !showControls);
     controlsOverlay.classList.toggle('hidden', !showControls);
 }
 
+/* ==================== 键盘事件处理 ==================== */
+
+/**
+ * 处理键盘按键事件
+ * 
+ * 支持的快捷键：
+ * - Escape: 退出全屏或返回上一页
+ * - Space: 暂停/播放
+ * - ArrowRight: 快进10秒
+ * - ArrowLeft: 后退10秒
+ * 
+ * @param {KeyboardEvent} e - 键盘事件对象
+ */
 function handleKeydown(e) {
     if (e.key === 'Escape') {
         if (isFullscreen) {
@@ -489,12 +743,27 @@ function handleKeydown(e) {
     }
 }
 
+/* ==================== 工具函数 ==================== */
+
+/**
+ * 格式化时间显示
+ * 
+ * 将秒数转换为 分:秒 格式。
+ * 
+ * @param {number} time - 时间（秒）
+ * @returns {string} 格式化后的时间字符串
+ */
 function formatTime(time) {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+/**
+ * 启动时钟显示
+ * 
+ * 每秒更新一次时钟显示，使用12小时制格式。
+ */
 function startClock() {
     const updateClock = () => {
         const now = new Date();
@@ -512,6 +781,11 @@ function startClock() {
     setInterval(updateClock, 1000);
 }
 
+/**
+ * 返回上一页
+ * 
+ * 清理定时器并跳转到首页。
+ */
 function goBack() {
     if (segmentTimeout) {
         clearTimeout(segmentTimeout);
@@ -522,4 +796,9 @@ function goBack() {
     window.location.href = '/';
 }
 
+/* ==================== 初始化 ==================== */
+
+/**
+ * 页面加载完成后初始化
+ */
 document.addEventListener('DOMContentLoaded', loadVideos);

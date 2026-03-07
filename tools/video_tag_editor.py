@@ -1,6 +1,27 @@
 """
 视频标签编辑器
-交互式控制台工具，用于编辑视频标签（增加、删减、修改）
+
+本模块提供交互式控制台工具，用于编辑视频标签。
+支持以下功能：
+- 搜索视频：按关键词搜索视频
+- 查看标签：显示视频当前的所有标签
+- 添加标签：为视频添加一个或多个标签
+- 移除标签：从视频移除一个或多个标签
+- 替换标签：批量设置视频的标签（替换现有标签）
+- 清空标签：移除视频的所有标签
+
+使用方式：
+    python tools/video_tag_editor.py
+    python tools/video_tag_editor.py /path/to/database.db
+
+操作流程：
+    1. 输入关键词搜索视频
+    2. 从搜索结果中选择目标视频
+    3. 在编辑菜单中选择操作（添加/移除/替换/清空标签）
+    4. 完成后可继续搜索其他视频或退出
+
+作者：Video Library System
+创建时间：2024
 """
 import sys
 import os
@@ -16,14 +37,47 @@ from video_tag_system.exceptions import VideoNotFoundError, TagNotFoundError
 
 
 class VideoTagEditor:
-    """视频标签编辑器"""
+    """
+    视频标签编辑器类
+    
+    提供视频标签管理的核心功能，包括搜索视频、获取标签信息、
+    添加/移除/设置标签等操作。
+    
+    属性：
+        db_manager: 数据库管理器实例
+    
+    使用示例：
+        editor = VideoTagEditor()
+        videos = editor.search_videos("电影")
+        editor.add_tag_to_video(video_id=1, tag_id=5)
+    """
     
     def __init__(self, db_url: Optional[str] = None):
+        """
+        初始化视频标签编辑器
+        
+        Args:
+            db_url: 数据库连接字符串，默认为当前目录下的video_library.db
+        """
         self.db_manager = DatabaseManager(database_url=db_url or "sqlite:///./video_library.db", echo=False)
         self.db_manager.create_tables()
     
     def search_videos(self, keyword: str) -> List[dict]:
-        """搜索视频"""
+        """
+        搜索视频
+        
+        根据关键词搜索视频标题或文件名，返回匹配的视频列表。
+        
+        Args:
+            keyword: 搜索关键词
+            
+        Returns:
+            视频字典列表，每个字典包含：
+            - id: 视频ID
+            - title: 视频标题
+            - file_path: 文件路径
+            - duration: 视频时长（秒）
+        """
         with self.db_manager.get_session() as session:
             video_repo = VideoRepository(session)
             videos, _ = video_repo.list_all(page=1, page_size=50, search=keyword)
@@ -39,7 +93,19 @@ class VideoTagEditor:
             return result
     
     def get_video_tags(self, video_id: int) -> List[dict]:
-        """获取视频的标签"""
+        """
+        获取视频的标签列表
+        
+        Args:
+            video_id: 视频ID
+            
+        Returns:
+            标签字典列表，每个字典包含：
+            - id: 标签ID
+            - name: 标签名称
+            - parent_id: 父标签ID（如果有）
+            - parent_name: 父标签名称（如果有）
+        """
         with self.db_manager.get_session() as session:
             video_tag_repo = VideoTagRepository(session)
             tag_repo = TagRepository(session)
@@ -60,7 +126,21 @@ class VideoTagEditor:
             return result
     
     def get_all_tags(self) -> List[dict]:
-        """获取所有标签（树形结构）"""
+        """
+        获取所有标签（树形结构）
+        
+        返回系统中所有标签，按层级组织：
+        - 一级标签在前
+        - 二级标签紧跟其父标签
+        
+        Returns:
+            标签字典列表，每个字典包含：
+            - id: 标签ID
+            - name: 标签名称
+            - level: 标签层级（1或2）
+            - parent_id: 父标签ID（二级标签才有）
+            - parent_name: 父标签名称（二级标签才有）
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             tag_tree = tag_service.get_tag_tree()
@@ -84,42 +164,110 @@ class VideoTagEditor:
             return result
     
     def add_tag_to_video(self, video_id: int, tag_id: int) -> dict:
-        """为视频添加标签"""
+        """
+        为视频添加标签
+        
+        Args:
+            video_id: 视频ID
+            tag_id: 标签ID
+            
+        Returns:
+            操作结果字典，包含：
+            - added: 是否成功添加
+            - message: 操作消息
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             return video_tag_service.add_tag_to_video(video_id, tag_id)
     
     def remove_tag_from_video(self, video_id: int, tag_id: int) -> dict:
-        """从视频移除标签"""
+        """
+        从视频移除标签
+        
+        Args:
+            video_id: 视频ID
+            tag_id: 标签ID
+            
+        Returns:
+            操作结果字典，包含：
+            - removed: 是否成功移除
+            - message: 操作消息
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             return video_tag_service.remove_tag_from_video(video_id, tag_id)
     
     def set_video_tags(self, video_id: int, tag_ids: List[int]) -> dict:
-        """设置视频标签（替换）"""
+        """
+        设置视频标签（替换现有标签）
+        
+        将视频的标签设置为指定的标签列表，移除不在列表中的标签。
+        
+        Args:
+            video_id: 视频ID
+            tag_ids: 标签ID列表
+            
+        Returns:
+            操作结果字典，包含：
+            - tags_added: 添加的标签数量
+            - tags_removed: 移除的标签数量
+            - current_tag_count: 当前标签总数
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             return video_tag_service.set_video_tags(video_id, tag_ids)
     
     def clear_video_tags(self, video_id: int) -> int:
-        """清空视频所有标签"""
+        """
+        清空视频所有标签
+        
+        Args:
+            video_id: 视频ID
+            
+        Returns:
+            移除的标签数量
+        """
         with self.db_manager.get_session() as session:
             video_tag_repo = VideoTagRepository(session)
             return video_tag_repo.delete_by_video_id(video_id)
 
 
 def clear_screen():
-    """清屏"""
+    """
+    清屏函数
+    
+    根据操作系统执行相应的清屏命令：
+    - Windows: cls
+    - Linux/Mac: clear
+    """
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def print_separator(char='-', length=60):
-    """打印分隔线"""
+    """
+    打印分隔线
+    
+    Args:
+        char: 分隔线字符，默认为'-'
+        length: 分隔线长度，默认为60
+    """
     print(char * length)
 
 
 def format_duration(seconds: Optional[int]) -> str:
-    """格式化时长"""
+    """
+    格式化时长显示
+    
+    将秒数转换为可读的时长格式：
+    - 大于1小时：H:MM:SS
+    - 小于1小时：M:SS
+    
+    Args:
+        seconds: 时长秒数
+        
+    Returns:
+        格式化的时长字符串，如 "1:30:45" 或 "45:30"
+    """
     if not seconds:
         return "未知"
     minutes, secs = divmod(seconds, 60)
@@ -130,7 +278,19 @@ def format_duration(seconds: Optional[int]) -> str:
 
 
 def select_from_list(items: List[dict], prompt: str, key_name: str = "name") -> Optional[dict]:
-    """从列表中选择一项"""
+    """
+    从列表中选择一项
+    
+    显示列表项并提示用户选择，返回用户选择的项目。
+    
+    Args:
+        items: 可选项列表
+        prompt: 提示信息
+        key_name: 用于显示的字段名
+        
+    Returns:
+        用户选择的项目字典，如果取消则返回None
+    """
     if not items:
         print("\n没有可选项")
         return None
@@ -167,7 +327,20 @@ def select_from_list(items: List[dict], prompt: str, key_name: str = "name") -> 
 
 
 def search_video_flow(editor: VideoTagEditor) -> Optional[dict]:
-    """搜索视频流程"""
+    """
+    搜索视频流程
+    
+    交互式搜索视频的流程：
+    1. 提示用户输入搜索关键词
+    2. 显示搜索结果
+    3. 让用户选择目标视频
+    
+    Args:
+        editor: 视频标签编辑器实例
+        
+    Returns:
+        用户选择的视频字典，如果取消则返回None
+    """
     while True:
         print("\n" + "=" * 60)
         print("  视频标签编辑器 - 搜索视频")
@@ -197,7 +370,15 @@ def search_video_flow(editor: VideoTagEditor) -> Optional[dict]:
 
 
 def show_video_info(video: dict, tags: List[dict]):
-    """显示视频信息和标签"""
+    """
+    显示视频信息和标签
+    
+    在控制台中格式化显示视频的详细信息和当前标签。
+    
+    Args:
+        video: 视频信息字典
+        tags: 标签列表
+    """
     print("\n" + "=" * 60)
     print("  当前视频信息")
     print("=" * 60)
@@ -218,7 +399,18 @@ def show_video_info(video: dict, tags: List[dict]):
 
 
 def add_tag_flow(editor: VideoTagEditor, video_id: int):
-    """添加标签流程"""
+    """
+    添加标签流程
+    
+    交互式添加标签的流程：
+    1. 显示所有可添加的标签（排除已有标签）
+    2. 让用户选择要添加的标签（支持多选）
+    3. 确认后执行添加操作
+    
+    Args:
+        editor: 视频标签编辑器实例
+        video_id: 视频ID
+    """
     all_tags = editor.get_all_tags()
     
     if not all_tags:
@@ -281,7 +473,18 @@ def add_tag_flow(editor: VideoTagEditor, video_id: int):
 
 
 def remove_tag_flow(editor: VideoTagEditor, video_id: int):
-    """移除标签流程"""
+    """
+    移除标签流程
+    
+    交互式移除标签的流程：
+    1. 显示视频当前的标签
+    2. 让用户选择要移除的标签（支持多选）
+    3. 确认后执行移除操作
+    
+    Args:
+        editor: 视频标签编辑器实例
+        video_id: 视频ID
+    """
     current_tags = editor.get_video_tags(video_id)
     
     if not current_tags:
@@ -332,7 +535,18 @@ def remove_tag_flow(editor: VideoTagEditor, video_id: int):
 
 
 def replace_tags_flow(editor: VideoTagEditor, video_id: int):
-    """替换标签流程"""
+    """
+    替换标签流程
+    
+    交互式替换标签的流程：
+    1. 显示所有标签，标记当前已选中的标签
+    2. 让用户选择新的标签组合
+    3. 确认后替换现有标签
+    
+    Args:
+        editor: 视频标签编辑器实例
+        video_id: 视频ID
+    """
     all_tags = editor.get_all_tags()
     
     if not all_tags:
@@ -389,7 +603,17 @@ def replace_tags_flow(editor: VideoTagEditor, video_id: int):
 
 
 def clear_tags_flow(editor: VideoTagEditor, video_id: int):
-    """清空标签流程"""
+    """
+    清空标签流程
+    
+    交互式清空标签的流程：
+    1. 显示当前标签数量
+    2. 确认后清空所有标签
+    
+    Args:
+        editor: 视频标签编辑器实例
+        video_id: 视频ID
+    """
     current_tags = editor.get_video_tags(video_id)
     
     if not current_tags:
@@ -407,7 +631,16 @@ def clear_tags_flow(editor: VideoTagEditor, video_id: int):
 
 
 def edit_menu(editor: VideoTagEditor, video: dict):
-    """编辑菜单"""
+    """
+    编辑菜单
+    
+    显示视频编辑菜单，提供标签管理操作选项。
+    循环显示直到用户选择返回或退出。
+    
+    Args:
+        editor: 视频标签编辑器实例
+        video: 当前视频信息字典
+    """
     while True:
         tags = editor.get_video_tags(video["id"])
         show_video_info(video, tags)
@@ -452,7 +685,12 @@ def edit_menu(editor: VideoTagEditor, video: dict):
 
 
 def main():
-    """主函数"""
+    """
+    主函数 - 程序入口
+    
+    初始化编辑器并启动交互式界面。
+    主循环处理视频搜索和编辑流程。
+    """
     print("\n" + "=" * 60)
     print("  视频标签编辑器 v1.0")
     print("  用于交互式编辑视频标签")

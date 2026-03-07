@@ -1,5 +1,42 @@
 """
-API v1 标签路由
+API v1 标签路由模块
+
+提供标签相关的RESTful API接口。
+
+路由列表：
+    GET    /tags/tree           # 获取标签树结构
+    GET    /tags/<tag_id>/videos  # 获取标签下的视频列表
+
+功能特点：
+    - 支持层级标签结构
+    - 自动计算标签下的视频数量
+    - 查询结果缓存
+
+使用示例：
+    # 获取标签树
+    GET /api/v1/tags/tree
+    
+    # 获取标签下的视频
+    GET /api/v1/tags/1/videos?page=1&page_size=50
+
+标签树结构：
+    [
+        {
+            "id": 1,
+            "name": "类型",
+            "parent_id": null,
+            "level": 0,
+            "children": [
+                {
+                    "id": 2,
+                    "name": "动作",
+                    "parent_id": 1,
+                    "level": 1,
+                    "video_count": 10
+                }
+            ]
+        }
+    ]
 """
 import os
 from flask import Blueprint, request, g
@@ -13,7 +50,12 @@ tags_bp = Blueprint('tags', __name__, url_prefix='/tags')
 
 
 def get_services():
-    """获取服务实例"""
+    """
+    获取服务实例
+    
+    Returns:
+        tuple: (video_service, tag_service, video_tag_service, db_session)
+    """
     from web.services import get_services as _get_services
     return _get_services()
 
@@ -22,7 +64,39 @@ def get_services():
 @login_required
 @handle_exceptions
 def get_tag_tree():
-    """获取标签树"""
+    """
+    获取标签树
+    
+    返回层级结构的标签树，包含每个标签下的视频数量。
+    结果会被缓存以提高性能。
+    
+    Returns:
+        JSON响应，包含标签树结构
+    
+    Response Structure:
+        [
+            {
+                "id": 1,
+                "name": "类型",
+                "parent_id": null,
+                "description": "视频类型分类",
+                "sort_order": 0,
+                "level": 0,
+                "children": [
+                    {
+                        "id": 2,
+                        "name": "动作",
+                        "parent_id": 1,
+                        "level": 1,
+                        "video_count": 10
+                    }
+                ]
+            }
+        ]
+    
+    Example:
+        GET /api/v1/tags/tree
+    """
     cache = get_cache()
     cache_key = CACHE_KEYS['tag_tree']
     
@@ -65,7 +139,24 @@ def get_tag_tree():
 @login_required
 @handle_exceptions
 def get_videos_by_tag(tag_id):
-    """根据标签获取视频列表"""
+    """
+    根据标签获取视频列表
+    
+    返回指定标签下的所有视频，支持分页。
+    
+    Args:
+        tag_id: 标签ID
+    
+    Query Parameters:
+        page: 页码，默认1
+        page_size: 每页数量，默认50
+    
+    Returns:
+        JSON响应，包含视频列表和分页信息
+    
+    Example:
+        GET /api/v1/tags/1/videos?page=1&page_size=20
+    """
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 50, type=int)
     

@@ -1,6 +1,24 @@
 """
 数据库性能测试脚本
-用于测试和对比优化前后的性能
+
+本模块用于测试和对比数据库优化前后的性能表现。
+通过执行各种查询操作并测量耗时来评估数据库性能。
+
+测试项目：
+- 数据库完整性检查：检查数据库配置和状态
+- 随机查询性能：测试随机排序查询的响应时间
+- 搜索查询性能：测试关键词搜索的响应时间
+- 分页查询性能：测试分页查询的响应时间
+
+性能评估标准：
+- 随机查询：<50ms 优秀，<100ms 良好，>100ms 需优化
+- 搜索查询：<30ms 优秀，<80ms 良好，>80ms 需优化
+
+使用方式：
+    python tools/test_database_performance.py
+
+作者：Video Library System
+创建时间：2024
 """
 import sys
 import os
@@ -16,7 +34,16 @@ from video_tag_system.models.video import VideoCreate
 
 
 def setup_test_data(session, count=1000):
-    """准备测试数据"""
+    """
+    准备测试数据
+    
+    如果数据库中的记录数不足，则创建测试数据。
+    测试数据包含随机生成的视频信息。
+    
+    Args:
+        session: 数据库会话
+        count: 目标记录数，默认为1000条
+    """
     print(f"准备 {count} 条测试数据...")
     
     repo = VideoRepository(session)
@@ -47,7 +74,19 @@ def setup_test_data(session, count=1000):
 
 
 def test_random_query_performance(session, iterations=10):
-    """测试随机查询性能"""
+    """
+    测试随机查询性能
+    
+    执行多次随机排序查询，测量平均响应时间。
+    随机查询用于实现视频的随机展示功能。
+    
+    Args:
+        session: 数据库会话
+        iterations: 测试迭代次数，默认为10次
+        
+    Returns:
+        float: 平均查询耗时（毫秒）
+    """
     print("\n测试随机查询性能...")
     print("-" * 60)
     
@@ -73,7 +112,19 @@ def test_random_query_performance(session, iterations=10):
 
 
 def test_search_query_performance(session, iterations=10):
-    """测试搜索查询性能"""
+    """
+    测试搜索查询性能
+    
+    执行多次关键词搜索查询，测量平均响应时间。
+    搜索查询是系统最常用的功能之一。
+    
+    Args:
+        session: 数据库会话
+        iterations: 测试迭代次数，默认为10次
+        
+    Returns:
+        float: 平均查询耗时（毫秒）
+    """
     print("\n测试搜索查询性能...")
     print("-" * 60)
     
@@ -97,7 +148,19 @@ def test_search_query_performance(session, iterations=10):
 
 
 def test_pagination_performance(session, iterations=5):
-    """测试分页查询性能"""
+    """
+    测试分页查询性能
+    
+    执行多次分页查询，测量平均响应时间。
+    分页查询用于视频列表的翻页显示。
+    
+    Args:
+        session: 数据库会话
+        iterations: 测试迭代次数，默认为5次
+        
+    Returns:
+        float: 平均查询耗时（毫秒）
+    """
     print("\n测试分页查询性能...")
     print("-" * 60)
     
@@ -120,7 +183,19 @@ def test_pagination_performance(session, iterations=5):
 
 
 def test_database_integrity(session):
-    """测试数据库完整性"""
+    """
+    测试数据库完整性
+    
+    检查数据库的各项配置和状态，包括：
+    - 完整性检查结果
+    - 日志模式（WAL/DELETE等）
+    - 缓存大小
+    - 同步模式
+    - 外键约束状态
+    
+    Args:
+        session: 数据库会话
+    """
     print("\n测试数据库完整性...")
     print("-" * 60)
     
@@ -142,7 +217,12 @@ def test_database_integrity(session):
 
 
 def run_performance_tests():
-    """运行性能测试"""
+    """
+    运行性能测试
+    
+    主测试函数，依次执行所有测试项目并输出结果。
+    测试完成后给出性能评估和建议。
+    """
     print("=" * 60)
     print("数据库性能测试")
     print("=" * 60)

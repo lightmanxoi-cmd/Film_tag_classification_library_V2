@@ -1,5 +1,37 @@
 """
-Flask应用工厂
+Flask应用工厂模块
+
+使用应用工厂模式创建Flask应用实例，支持多环境配置。
+提供数据库管理、缓存清理、请求钩子等功能。
+
+主要功能：
+    - create_app: 应用工厂函数，创建并配置Flask应用
+    - get_db_manager: 获取数据库管理器单例
+
+应用结构：
+    - 扩展初始化：CORS跨域支持
+    - 认证初始化：基于Argon2的密码认证
+    - 蓝图注册：API、页面、认证模块
+    - 请求钩子：数据库会话管理、缓存清理
+    - 错误处理：统一异常处理
+
+使用示例：
+    # 创建应用
+    app = create_app('development')
+    
+    # 运行应用
+    app.run(host='0.0.0.0', port=5000)
+
+配置环境：
+    - development: 开发环境，启用调试和SQL日志
+    - production: 生产环境，启用安全配置和日志
+    - testing: 测试环境，使用内存数据库
+
+Attributes:
+    db_manager: 数据库管理器单例
+    query_cache: 查询缓存实例
+    _last_cache_cleanup: 上次缓存清理时间
+    CACHE_CLEANUP_INTERVAL: 缓存清理间隔（秒）
 """
 import os
 import time
@@ -23,7 +55,19 @@ CACHE_CLEANUP_INTERVAL = 300
 
 
 def get_db_manager():
-    """获取数据库管理器单例"""
+    """
+    获取数据库管理器单例
+    
+    创建或返回全局数据库管理器实例。
+    首次调用时会创建表结构。
+    
+    Returns:
+        DatabaseManager: 数据库管理器实例
+    
+    Example:
+        db = get_db_manager()
+        session = db.session_factory()
+    """
     global db_manager
     if db_manager is None:
         db_manager = DatabaseManager(
@@ -38,11 +82,36 @@ def create_app(config_name: str = None) -> Flask:
     """
     Flask应用工厂函数
     
+    创建并配置Flask应用实例。按照以下顺序初始化：
+    1. 加载配置
+    2. 初始化扩展
+    3. 初始化认证
+    4. 注册蓝图
+    5. 注册请求钩子
+    6. 注册错误处理器
+    7. 初始化数据库
+    8. 注册清理函数
+    
     Args:
-        config_name: 配置名称 ('development', 'production', 'testing')
+        config_name: 配置名称
+            - 'development': 开发环境
+            - 'production': 生产环境
+            - 'testing': 测试环境
+            - None: 从环境变量FLASK_ENV读取，默认'default'
     
     Returns:
-        Flask应用实例
+        Flask: 配置完成的Flask应用实例
+    
+    Example:
+        # 开发环境
+        app = create_app('development')
+        
+        # 生产环境
+        app = create_app('production')
+        
+        # 从环境变量读取
+        export FLASK_ENV=production
+        app = create_app()
     """
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'default')
@@ -72,17 +141,43 @@ def create_app(config_name: str = None) -> Flask:
 
 
 def _init_extensions(app: Flask):
-    """初始化Flask扩展"""
+    """
+    初始化Flask扩展
+    
+    初始化CORS等Flask扩展。
+    
+    Args:
+        app: Flask应用实例
+    """
     cors.init_app(app)
 
 
 def _init_auth(app: Flask):
-    """初始化认证模块"""
+    """
+    初始化认证模块
+    
+    设置应用密钥和会话配置。
+    
+    Args:
+        app: Flask应用实例
+    """
     init_auth(app)
 
 
 def _register_blueprints(app: Flask):
-    """注册蓝图"""
+    """
+    注册蓝图
+    
+    注册所有应用蓝图：
+    - auth_bp: 认证相关路由
+    - pages_bp: 页面路由
+    - api_v1: API v1版本路由
+    
+    同时注册兼容旧API的路由。
+    
+    Args:
+        app: Flask应用实例
+    """
     app.register_blueprint(auth_bp)
     app.register_blueprint(pages_bp)
     register_api_v1_blueprints(app)
@@ -91,7 +186,19 @@ def _register_blueprints(app: Flask):
 
 
 def _register_legacy_routes(app: Flask):
-    """注册兼容旧API的路由（保持向后兼容）"""
+    """
+    注册兼容旧API的路由
+    
+    为保持向后兼容，将旧版API路由重定向到新版API。
+    旧版路由格式：/api/xxx
+    新版路由格式：/api/v1/xxx
+    
+    Args:
+        app: Flask应用实例
+    
+    Note:
+        这些路由将在未来版本中移除，请使用新版API。
+    """
     
     @app.route('/video/stream/<int:video_id>')
     def legacy_video_stream(video_id):
@@ -189,10 +296,24 @@ def _register_legacy_routes(app: Flask):
 
 
 def _register_request_hooks(app: Flask):
-    """注册请求钩子"""
+    """
+    注册请求钩子
+    
+    设置请求前后的处理逻辑：
+    - before_request: 初始化请求上下文、定期清理缓存
+    - teardown_request: 清理数据库会话
+    
+    Args:
+        app: Flask应用实例
+    """
     
     @app.before_request
     def before_request():
+        """
+        请求前处理
+        
+        初始化请求上下文变量，定期清理过期缓存。
+        """
         g.db_session = None
         g.video_service = None
         g.tag_service = None
@@ -208,6 +329,14 @@ def _register_request_hooks(app: Flask):
     
     @app.teardown_request
     def teardown_request(exception=None):
+        """
+        请求后处理
+        
+        清理数据库会话，发生异常时回滚事务。
+        
+        Args:
+            exception: 请求过程中发生的异常，无异常时为None
+        """
         session = getattr(g, 'db_session', None)
         if session is not None:
             try:
@@ -219,14 +348,29 @@ def _register_request_hooks(app: Flask):
 
 
 def _init_database(app: Flask):
-    """初始化数据库"""
+    """
+    初始化数据库
+    
+    创建数据库管理器实例，确保表结构存在。
+    
+    Args:
+        app: Flask应用实例
+    """
     get_db_manager()
 
 
 def _register_cleanup(app: Flask):
-    """注册清理函数"""
+    """
+    注册清理函数
+    
+    应用退出时清理缓存等资源。
+    
+    Args:
+        app: Flask应用实例
+    """
     
     def cleanup_on_exit():
+        """应用退出时的清理函数"""
         try:
             query_cache.clear()
             print("Cache cleared on exit")

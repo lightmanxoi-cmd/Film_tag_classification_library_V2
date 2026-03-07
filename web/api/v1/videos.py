@@ -1,5 +1,37 @@
 """
-API v1 视频路由
+API v1 视频路由模块
+
+提供视频相关的RESTful API接口。
+
+路由列表：
+    GET    /videos                    # 获取视频列表
+    GET    /videos/<video_id>         # 获取视频详情
+    POST   /videos/by-tags            # 按标签搜索视频
+    POST   /videos/by-tags-advanced   # 高级标签搜索
+    GET    /videos/stream/<video_id>  # 视频流播放
+    GET    /videos/<video_id>/stream-url  # 获取视频流URL
+    POST   /videos/<video_id>/gif     # 生成GIF预览
+
+功能特点：
+    - 支持分页查询
+    - 支持随机排序
+    - 支持关键词搜索
+    - 支持多标签筛选
+    - 支持Range请求的视频流
+    - 自动缓存查询结果
+
+使用示例：
+    # 获取视频列表
+    GET /api/v1/videos?page=1&page_size=50&search=关键词
+    
+    # 按标签搜索
+    POST /api/v1/videos/by-tags
+    {
+        "tag_ids": [1, 2, 3],
+        "match_all": false,
+        "page": 1,
+        "page_size": 50
+    }
 """
 import os
 import re
@@ -14,7 +46,12 @@ videos_bp = Blueprint('videos', __name__, url_prefix='/videos')
 
 
 def get_services():
-    """获取服务实例"""
+    """
+    获取服务实例
+    
+    Returns:
+        tuple: (video_service, tag_service, video_tag_service, db_session)
+    """
     from web.services import get_services as _get_services
     return _get_services()
 
@@ -23,7 +60,24 @@ def get_services():
 @login_required
 @handle_exceptions
 def get_videos():
-    """获取视频列表"""
+    """
+    获取视频列表
+    
+    支持分页、搜索、随机排序。
+    
+    Query Parameters:
+        page: 页码，默认1
+        page_size: 每页数量，默认50
+        search: 搜索关键词
+        random: 是否随机排序，默认true
+        seed: 随机种子（用于保持随机顺序一致）
+    
+    Returns:
+        JSON响应，包含视频列表和分页信息
+    
+    Example:
+        GET /api/v1/videos?page=1&page_size=20&search=测试&random=true
+    """
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 50, type=int)
     search = request.args.get('search', None)
@@ -79,7 +133,18 @@ def get_videos():
 @login_required
 @handle_exceptions
 def get_video_detail(video_id):
-    """获取视频详情"""
+    """
+    获取视频详情
+    
+    Args:
+        video_id: 视频ID
+    
+    Returns:
+        JSON响应，包含视频详细信息
+    
+    Example:
+        GET /api/v1/videos/1
+    """
     cache = get_cache()
     cache_key = f"{CACHE_KEYS['video_by_id']}:{video_id}"
     
@@ -107,7 +172,29 @@ def get_video_detail(video_id):
 @login_required
 @handle_exceptions
 def get_videos_by_multiple_tags():
-    """根据多个标签获取视频"""
+    """
+    根据多个标签获取视频
+    
+    支持AND/OR逻辑筛选。
+    
+    Request Body:
+        tag_ids: 标签ID列表
+        page: 页码
+        page_size: 每页数量
+        match_all: 是否匹配所有标签（AND逻辑），false为OR逻辑
+    
+    Returns:
+        JSON响应，包含视频列表和分页信息
+    
+    Example:
+        POST /api/v1/videos/by-tags
+        {
+            "tag_ids": [1, 2, 3],
+            "match_all": false,
+            "page": 1,
+            "page_size": 50
+        }
+    """
     data = request.get_json()
     tag_ids = data.get('tag_ids', [])
     page = data.get('page', 1)
@@ -172,7 +259,32 @@ def get_videos_by_multiple_tags():
 @login_required
 @handle_exceptions
 def get_videos_by_tags_advanced():
-    """高级标签搜索"""
+    """
+    高级标签搜索
+    
+    支持按标签分类进行高级筛选，每个分类内的标签使用OR逻辑，
+    不同分类之间使用AND逻辑。
+    
+    Request Body:
+        tags_by_category: 按分类组织的标签字典
+            {"分类1": [tag_id1, tag_id2], "分类2": [tag_id3]}
+        page: 页码
+        page_size: 每页数量
+    
+    Returns:
+        JSON响应，包含视频列表和分页信息
+    
+    Example:
+        POST /api/v1/videos/by-tags-advanced
+        {
+            "tags_by_category": {
+                "类型": [1, 2],
+                "地区": [5, 6]
+            },
+            "page": 1,
+            "page_size": 50
+        }
+    """
     data = request.get_json()
     tags_by_category = data.get('tags_by_category', {})
     page = data.get('page', 1)
@@ -236,6 +348,16 @@ VIDEO_CACHE_MAX_AGE = 3600
 
 
 def _parse_range_header(range_header: str, file_size: int) -> tuple:
+    """
+    解析HTTP Range请求头
+    
+    Args:
+        range_header: Range请求头值
+        file_size: 文件总大小
+    
+    Returns:
+        tuple: (start, end) 字节范围，无效时返回 (None, None)
+    """
     start = 0
     end = file_size - 1
     
@@ -253,6 +375,20 @@ def _parse_range_header(range_header: str, file_size: int) -> tuple:
 
 
 def _generate_chunks(file_path: str, start: int, length: int, chunk_size: int):
+    """
+    生成文件块生成器
+    
+    用于流式传输大文件，避免一次性加载到内存。
+    
+    Args:
+        file_path: 文件路径
+        start: 起始字节位置
+        length: 读取长度
+        chunk_size: 每次读取的块大小
+    
+    Yields:
+        bytes: 文件数据块
+    """
     with open(file_path, 'rb') as f:
         f.seek(start)
         remaining = length
@@ -269,6 +405,24 @@ def _generate_chunks(file_path: str, start: int, length: int, chunk_size: int):
 @login_required
 @handle_exceptions
 def serve_video_by_id(video_id):
+    """
+    视频流播放
+    
+    支持HTTP Range请求，实现视频拖动播放。
+    添加缓存头优化重复播放性能。
+    
+    Args:
+        video_id: 视频ID
+    
+    Returns:
+        Response: 视频流响应
+    
+    Features:
+        - 支持Range请求（206 Partial Content）
+        - 1MB块大小流式传输
+        - 1小时浏览器缓存
+        - 自动识别视频MIME类型
+    """
     video_svc, _, _, _ = get_services()
     video = video_svc.get_video(video_id)
     full_path = video.file_path
@@ -324,7 +478,29 @@ def serve_video_by_id(video_id):
 @login_required
 @handle_exceptions
 def get_video_stream_url(video_id):
-    """获取视频流URL"""
+    """
+    获取视频流URL
+    
+    返回视频的流媒体播放地址。
+    
+    Args:
+        video_id: 视频ID
+    
+    Returns:
+        JSON响应，包含流媒体URL和视频信息
+    
+    Example:
+        GET /api/v1/videos/1/stream-url
+        {
+            "success": true,
+            "data": {
+                "stream_url": "/api/v1/videos/stream/1",
+                "title": "视频标题",
+                "duration": 3600,
+                "file_ext": ".mp4"
+            }
+        }
+    """
     video_svc, _, _, _ = get_services()
     video = video_svc.get_video(video_id)
     file_path = video.file_path
@@ -344,7 +520,27 @@ def get_video_stream_url(video_id):
 @login_required
 @handle_exceptions
 def generate_gif_for_video(video_id):
-    """为视频生成GIF"""
+    """
+    为视频生成GIF预览
+    
+    使用FFmpeg从视频中间位置截取片段生成GIF动画。
+    
+    Args:
+        video_id: 视频ID
+    
+    Returns:
+        JSON响应，包含GIF URL
+    
+    Example:
+        POST /api/v1/videos/1/gif
+        {
+            "success": true,
+            "message": "GIF生成成功",
+            "data": {
+                "gif_url": "/static/gifs/视频标题.gif"
+            }
+        }
+    """
     video_svc, _, _, _ = get_services()
     video = video_svc.get_video(video_id)
     video_title = video.title or os.path.basename(video.file_path)

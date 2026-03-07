@@ -1,6 +1,28 @@
 """
 批量视频地址更新工具
-根据视频名称匹配本地文件，更新数据库中的文件路径
+
+本模块用于批量更新数据库中视频的文件路径。
+当视频文件位置发生变化时，可以通过扫描本地文件夹来匹配并更新数据库中的路径。
+
+主要功能：
+- 扫描本地文件夹中的所有视频文件
+- 根据视频标题（文件名）匹配数据库记录
+- 批量更新匹配成功的视频路径
+- 支持仅更新路径失效的视频记录
+
+使用场景：
+- 视频文件迁移到新位置
+- 更换存储设备后更新路径
+- 清理失效的路径记录
+
+使用方式：
+    python tools/update_video_paths.py "D:\\Videos"
+    python tools/update_video_paths.py "D:\\Videos" --dry-run
+    python tools/update_video_paths.py "D:\\Videos" --filter-missing
+    python tools/update_video_paths.py "D:\\Videos" --export-not-found
+
+作者：Video Library System
+创建时间：2024
 """
 import os
 import sys
@@ -18,7 +40,21 @@ from video_tag_system.models.video import Video
 
 
 class VideoPathUpdater:
-    """视频路径更新器"""
+    """
+    视频路径更新器类
+    
+    提供视频路径的批量更新功能，通过扫描本地文件夹来匹配
+    数据库中的视频记录，并更新其文件路径。
+    
+    属性：
+        db_manager: 数据库管理器实例
+        verbose: 是否输出详细日志信息
+        results: 操作结果统计字典
+    
+    使用示例：
+        updater = VideoPathUpdater()
+        result = updater.run("D:\\Videos", dry_run=True)
+    """
     
     VIDEO_EXTENSIONS = {
         '.mp4', '.mkv', '.avi', '.wmv', '.mov', '.flv', 
@@ -27,6 +63,13 @@ class VideoPathUpdater:
     }
     
     def __init__(self, db_url: str = "sqlite:///./video_library.db", verbose: bool = True):
+        """
+        初始化视频路径更新器
+        
+        Args:
+            db_url: 数据库连接字符串，默认为当前目录下的video_library.db
+            verbose: 是否输出详细日志，默认为True
+        """
         self.db_manager = DatabaseManager(database_url=db_url)
         self.verbose = verbose
         self.results = {
@@ -43,7 +86,7 @@ class VideoPathUpdater:
         从数据库获取所有视频
         
         Returns:
-            [(video_id, title, current_path), ...]
+            元组列表，每个元组格式为 (video_id, title, current_path)
         """
         with self.db_manager.get_session() as session:
             result = session.execute(
@@ -55,8 +98,16 @@ class VideoPathUpdater:
         """
         扫描本地路径中的所有视频文件
         
+        递归扫描指定路径下的所有视频文件，建立文件名到路径的映射。
+        
+        Args:
+            root_path: 要扫描的根路径
+            
         Returns:
-            {文件名(不含后缀): 完整路径}
+            字典，键为文件名（不含后缀），值为完整路径
+            
+        Raises:
+            FileNotFoundError: 如果路径不存在
         """
         root = Path(root_path)
         if not root.exists():
@@ -85,15 +136,16 @@ class VideoPathUpdater:
         """
         匹配数据库视频与本地文件
         
+        根据视频标题（文件名）匹配数据库记录和本地文件。
+        
         Args:
-            db_videos: [(video_id, title, current_path), ...]
-            local_videos: {文件名: 完整路径}
+            db_videos: 数据库视频列表，格式为 [(video_id, title, current_path), ...]
+            local_videos: 本地视频字典，格式为 {文件名: 完整路径}
             
         Returns:
-            {
-                'matched': [(video_id, title, old_path, new_path), ...],
-                'not_found': [(video_id, title), ...]
-            }
+            字典，包含：
+            - matched: 匹配成功的列表 [(video_id, title, old_path, new_path), ...]
+            - not_found: 未找到的列表 [(video_id, title), ...]
         """
         matched = []
         not_found = []
@@ -117,11 +169,14 @@ class VideoPathUpdater:
         """
         批量更新视频路径（单事务）
         
+        在单个数据库事务中更新多个视频的路径。
+        
         Args:
-            updates: [(video_id, new_path), ...]
+            updates: 更新列表，格式为 [(video_id, new_path), ...]
             
         Returns:
-            (成功数量, 失败列表)
+            元组 (成功数量, 失败列表)
+            失败列表中的每个元素为 (video_id, 错误信息)
         """
         success_count = 0
         failed = []
@@ -146,7 +201,16 @@ class VideoPathUpdater:
         return success_count, failed
     
     def update_video_path(self, video_id: int, new_path: str) -> bool:
-        """更新单个视频的路径"""
+        """
+        更新单个视频的路径
+        
+        Args:
+            video_id: 视频ID
+            new_path: 新的文件路径
+            
+        Returns:
+            bool: 更新成功返回True，失败返回False
+        """
         try:
             with self.db_manager.get_session() as session:
                 video = session.get(Video, video_id)
@@ -160,14 +224,20 @@ class VideoPathUpdater:
             return False
     
     def export_not_found(self, output_file: str = "not_found_videos.txt"):
-        """导出未找到的视频列表"""
+        """
+        导出未找到的视频列表
+        
+        将未能匹配的视频信息导出到文本文件，便于后续处理。
+        
+        Args:
+            output_file: 输出文件名，默认为not_found_videos.txt
+        """
         with open(output_file, 'w', encoding='utf-8') as f:
             for video_id, title in self.results['not_found']:
                 f.write(f"{video_id}\t{title}\n")
         print(f"未找到的视频列表已导出到: {output_file}")
     
     def run(
-        
         self,
         search_path: str,
         dry_run: bool = False,
@@ -176,10 +246,19 @@ class VideoPathUpdater:
         """
         执行批量更新
         
+        主执行函数，完成以下步骤：
+        1. 从数据库获取视频列表
+        2. 扫描本地视频文件
+        3. 匹配视频记录
+        4. 更新数据库路径
+        
         Args:
             search_path: 搜索路径
-            dry_run: 仅模拟运行，不实际更新
+            dry_run: 仅模拟运行，不实际更新数据库
             filter_missing: 仅处理当前路径不存在的视频
+            
+        Returns:
+            操作结果字典，包含updated、skipped、errors等字段
         """
         print(f"\n{'='*60}")
         print("批量视频地址更新工具")
@@ -281,6 +360,11 @@ class VideoPathUpdater:
 
 
 def main():
+    """
+    主函数 - 命令行入口
+    
+    解析命令行参数并执行路径更新操作。
+    """
     parser = argparse.ArgumentParser(
         description='批量视频地址更新工具 - 根据视频名称匹配并更新数据库路径',
         formatter_class=argparse.RawDescriptionHelpFormatter,

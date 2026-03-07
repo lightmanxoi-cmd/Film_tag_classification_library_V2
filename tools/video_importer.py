@@ -1,6 +1,32 @@
 """
 视频入库打标签工具
-提供交互式命令行界面，用于将视频文件及其标签信息导入数据库
+
+本模块提供交互式命令行工具，用于将视频文件及其标签信息导入数据库。
+支持单个文件导入和文件夹批量导入两种模式。
+
+主要功能：
+- 单个文件导入：导入指定的视频文件并打标签
+- 文件夹批量导入：扫描文件夹中的所有视频文件并批量导入
+- 递归扫描：支持扫描子文件夹中的视频文件
+- 自动匹配：根据文件名自动设置视频标题
+- 重复检测：检测已存在的视频并更新而非重复创建
+
+标签体系：
+- 一级标签：主要分类标签（如：电影、电视剧、纪录片等）
+- 二级标签：子分类标签（如：动作、喜剧、科幻等）
+
+使用方式：
+    交互式模式：
+        python tools/video_importer.py --interactive
+    
+    单文件模式：
+        python tools/video_importer.py --file "C:\\Videos\\movie.mp4" --level1 "电影" --level2 "动作"
+    
+    文件夹模式：
+        python tools/video_importer.py --folder "C:\\Videos" --level1 "电影" --recursive
+
+作者：Video Library System
+创建时间：2024
 """
 import os
 import sys
@@ -21,16 +47,45 @@ from video_tag_system.exceptions import (
 
 
 class VideoImporterCLI:
-    """视频入库打标签命令行工具"""
+    """
+    视频入库打标签命令行工具类
+    
+    提供视频导入和标签管理的核心功能，支持交互式和命令行两种操作模式。
+    
+    属性：
+        db_manager: 数据库管理器实例
+        VIDEO_EXTENSIONS: 支持的视频文件扩展名集合
+    
+    使用示例：
+        cli = VideoImporterCLI()
+        cli.import_video("/path/to/video.mp4", "电影", "动作")
+        cli.import_folder("/path/to/videos", "电影", recursive=True)
+    """
     
     VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.3gp', '.ogv'}
     
     def __init__(self, db_url: Optional[str] = None):
+        """
+        初始化视频导入工具
+        
+        Args:
+            db_url: 数据库连接字符串，默认为当前目录下的video_library.db
+        """
         self.db_manager = DatabaseManager(database_url=db_url, echo=False)
         self.db_manager.create_tables()
     
     def _strip_quotes(self, text: str) -> str:
-        """去除字符串两端的引号"""
+        """
+        去除字符串两端的引号
+        
+        处理用户输入中可能包含的引号，便于复制粘贴路径。
+        
+        Args:
+            text: 输入字符串
+            
+        Returns:
+            去除两端引号后的字符串
+        """
         if not text:
             return text
         text = text.strip()
@@ -40,7 +95,18 @@ class VideoImporterCLI:
         return text.strip()
 
     def _parse_file_paths(self, input_text: str) -> List[str]:
-        """解析多个文件路径，支持引号包裹的路径和空格分隔"""
+        """
+        解析多个文件路径
+        
+        支持引号包裹的路径和空格分隔的多个路径。
+        例如：'C:\\a.mp4' "D:\\b.mp4" E:\\c.mp4
+        
+        Args:
+            input_text: 用户输入的路径字符串
+            
+        Returns:
+            解析后的路径列表
+        """
         if not input_text:
             return []
 
@@ -53,7 +119,6 @@ class VideoImporterCLI:
         while i < len(input_text):
             char = input_text[i]
 
-            # 处理引号
             if char in ('"', "'") and not in_quotes:
                 in_quotes = True
                 quote_char = char
@@ -65,7 +130,6 @@ class VideoImporterCLI:
                 i += 1
                 continue
 
-            # 处理空格（只有在不在引号内时才作为分隔符）
             if char.isspace() and not in_quotes:
                 if current_path:
                     path = ''.join(current_path).strip()
@@ -77,7 +141,6 @@ class VideoImporterCLI:
 
             i += 1
 
-        # 添加最后一个路径
         if current_path:
             path = ''.join(current_path).strip()
             if path:
@@ -86,12 +149,31 @@ class VideoImporterCLI:
         return paths
 
     def _is_video_file(self, filename: str) -> bool:
-        """判断文件是否为视频文件"""
+        """
+        判断文件是否为视频文件
+        
+        根据文件扩展名判断是否为支持的视频格式。
+        
+        Args:
+            filename: 文件名
+            
+        Returns:
+            bool: 是视频文件返回True，否则返回False
+        """
         ext = os.path.splitext(filename)[1].lower()
         return ext in self.VIDEO_EXTENSIONS
     
     def _scan_video_files(self, folder_path: str, recursive: bool = False) -> List[str]:
-        """扫描文件夹中的所有视频文件"""
+        """
+        扫描文件夹中的所有视频文件
+        
+        Args:
+            folder_path: 文件夹路径
+            recursive: 是否递归扫描子文件夹
+            
+        Returns:
+            视频文件路径列表
+        """
         video_files = []
         
         if not os.path.isdir(folder_path):
@@ -116,7 +198,21 @@ class VideoImporterCLI:
         level1_tag_name: str,
         level2_tag_name: Optional[str] = None
     ) -> bool:
-        """导入视频到数据库，根据标题判断是否已存在"""
+        """
+        导入视频到数据库
+        
+        根据标题判断视频是否已存在：
+        - 如果存在：更新路径并添加新标签
+        - 如果不存在：创建新视频记录并添加标签
+        
+        Args:
+            file_path: 视频文件路径
+            level1_tag_name: 一级标签名称
+            level2_tag_name: 二级标签名称（可选）
+            
+        Returns:
+            bool: 导入成功返回True，失败返回False
+        """
         if not os.path.exists(file_path):
             print(f"✗ 错误: 文件不存在 '{file_path}'")
             return False
@@ -204,7 +300,17 @@ class VideoImporterCLI:
         level2_tag_name: Optional[str] = None,
         recursive: bool = False
     ) -> None:
-        """批量导入文件夹中的所有视频"""
+        """
+        批量导入文件夹中的所有视频
+        
+        扫描指定文件夹中的所有视频文件并批量导入。
+        
+        Args:
+            folder_path: 文件夹路径
+            level1_tag_name: 一级标签名称
+            level2_tag_name: 二级标签名称（可选）
+            recursive: 是否递归扫描子文件夹
+        """
         if not os.path.isdir(folder_path):
             print(f"✗ 错误: 文件夹不存在 '{folder_path}'")
             return
@@ -245,7 +351,12 @@ class VideoImporterCLI:
         print("="*60)
     
     def interactive_import(self) -> None:
-        """交互式导入视频"""
+        """
+        交互式导入视频
+        
+        提供菜单驱动的交互界面，用户可以通过选择菜单项来执行导入操作。
+        支持单个文件导入和文件夹批量导入两种模式。
+        """
         print("\n" + "="*60)
         print("视频入库打标签工具")
         print("="*60 + "\n")
@@ -284,18 +395,15 @@ class VideoImporterCLI:
                     print("✗ 错误: 无效的选项\n")
                     continue
 
-                # 获取文件/文件夹路径
                 if mode == '1':
                     file_paths_input = input("请输入视频文件路径 (多个路径用空格分隔): ").strip()
 
-                    # 解析多个文件路径（支持引号包裹的路径）
                     file_paths = self._parse_file_paths(file_paths_input)
 
                     if not file_paths:
                         print("✗ 错误: 文件路径不能为空\n")
                         continue
 
-                    # 验证所有文件路径
                     valid_files = []
                     for fp in file_paths:
                         if not os.path.exists(fp):
@@ -328,7 +436,6 @@ class VideoImporterCLI:
 
                     file_path = folder_path
 
-                # 循环为同一文件/文件夹添加多个标签
                 while True:
                     print("\n" + "-"*40)
                     if mode == '1':
@@ -360,7 +467,6 @@ class VideoImporterCLI:
                     level2_tag_name = level2_tag_name if level2_tag_name else None
 
                     if mode == '1':
-                        # 为多个文件批量添加相同标签
                         for i, fp in enumerate(file_paths, 1):
                             if len(file_paths) > 1:
                                 print(f"\n[{i}/{len(file_paths)}] 处理: {os.path.basename(fp)}")
@@ -378,6 +484,11 @@ class VideoImporterCLI:
 
 
 def main():
+    """
+    主函数 - 命令行入口
+    
+    解析命令行参数并执行相应的导入操作。
+    """
     import argparse
     
     parser = argparse.ArgumentParser(description="视频入库打标签工具")

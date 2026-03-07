@@ -1,6 +1,40 @@
 """
 视频数据库标签管理脚本
-提供标签的创建、删除、重命名、改变层级以及视频标签关联编辑等功能
+
+本模块提供标签的全面管理功能，包括：
+- 标签创建：创建一级和二级标签
+- 标签删除：删除标签（支持强制删除）
+- 标签重命名：修改标签名称
+- 标签层级变更：调整标签的父子关系
+- 标签合并：将一个标签合并到另一个标签
+- 标签信息查看：查看标签详情和统计信息
+- 视频标签管理：为视频添加、移除、设置标签
+
+标签体系说明：
+- 一级标签：主要分类标签（如：电影、电视剧、纪录片等）
+- 二级标签：子分类标签（如：动作、喜剧、科幻等）
+- 每个二级标签必须属于一个一级标签
+
+使用方式：
+    创建标签：
+        python tools/tag_manager.py create "动作" --desc "动作类型视频"
+        python tools/tag_manager.py create "武侠" --parent 1
+        python tools/tag_manager.py create "武侠" --parent-name "动作"
+    
+    删除标签：
+        python tools/tag_manager.py delete 5
+        python tools/tag_manager.py delete 5 --force
+    
+    查看标签：
+        python tools/tag_manager.py list --tree
+        python tools/tag_manager.py info 5
+    
+    视频标签操作：
+        python tools/tag_manager.py video-add 1 2
+        python tools/tag_manager.py video-tags 1
+
+作者：Video Library System
+创建时间：2024
 """
 import argparse
 import sys
@@ -25,9 +59,27 @@ from video_tag_system.exceptions import (
 
 
 class TagManagerCLI:
-    """标签管理命令行工具"""
+    """
+    标签管理命令行工具类
+    
+    提供标签管理的核心功能，支持命令行和交互式操作。
+    
+    属性：
+        db_manager: 数据库管理器实例
+    
+    使用示例：
+        manager = TagManagerCLI()
+        manager.create_tag("动作", description="动作类型视频")
+        manager.list_tags(show_tree=True)
+    """
     
     def __init__(self, db_url: Optional[str] = None):
+        """
+        初始化标签管理工具
+        
+        Args:
+            db_url: 数据库连接字符串，默认为None（使用配置文件设置）
+        """
         self.db_manager = DatabaseManager(database_url=db_url, echo=False)
         self.db_manager.create_tables()
     
@@ -39,7 +91,18 @@ class TagManagerCLI:
         description: Optional[str] = None,
         sort_order: int = 0
     ) -> None:
-        """创建标签"""
+        """
+        创建标签
+        
+        创建一级或二级标签。可以通过parent_id或parent_name指定父标签。
+        
+        Args:
+            name: 标签名称
+            parent_id: 父标签ID（创建二级标签时使用）
+            parent_name: 父标签名称（创建二级标签时使用，与parent_id互斥）
+            description: 标签描述
+            sort_order: 排序顺序，默认为0
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -82,7 +145,16 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def delete_tag(self, tag_id: int, force: bool = False) -> None:
-        """删除标签"""
+        """
+        删除标签
+        
+        删除指定标签。如果标签有子标签则无法删除。
+        如果标签关联了视频，需要使用--force参数强制删除。
+        
+        Args:
+            tag_id: 要删除的标签ID
+            force: 是否强制删除（删除关联关系）
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -123,7 +195,15 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def rename_tag(self, tag_id: int, new_name: str) -> None:
-        """重命名标签"""
+        """
+        重命名标签
+        
+        修改标签的名称。新名称在同一父标签下不能重复。
+        
+        Args:
+            tag_id: 标签ID
+            new_name: 新的标签名称
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -147,7 +227,16 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def move_tag(self, tag_id: int, new_parent_id: Optional[int]) -> None:
-        """改变标签层级"""
+        """
+        改变标签层级
+        
+        将标签移动到新的父标签下，或提升为一级标签。
+        注意：只能将标签移动到一级标签下。
+        
+        Args:
+            tag_id: 要移动的标签ID
+            new_parent_id: 新的父标签ID，None表示提升为一级标签
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -192,7 +281,17 @@ class TagManagerCLI:
         description: Optional[str] = None,
         sort_order: Optional[int] = None
     ) -> None:
-        """更新标签信息"""
+        """
+        更新标签信息
+        
+        更新标签的名称、描述或排序顺序。
+        
+        Args:
+            tag_id: 标签ID
+            name: 新名称（可选）
+            description: 新描述（可选）
+            sort_order: 新排序（可选）
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -240,7 +339,16 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def merge_tags(self, source_id: int, target_id: int) -> None:
-        """合并标签"""
+        """
+        合并标签
+        
+        将源标签的所有视频关联转移到目标标签，然后删除源标签。
+        用于清理重复标签或整合标签。
+        
+        Args:
+            source_id: 源标签ID（将被删除）
+            target_id: 目标标签ID（将保留）
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -278,7 +386,16 @@ class TagManagerCLI:
         search: Optional[str] = None,
         show_tree: bool = False
     ) -> None:
-        """列出标签"""
+        """
+        列出标签
+        
+        以列表或树形结构显示标签。
+        
+        Args:
+            parent_id: 只显示指定父标签的子标签
+            search: 搜索关键词
+            show_tree: 是否以树形结构显示
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -288,7 +405,15 @@ class TagManagerCLI:
                 self._show_tag_list(tag_service, parent_id, search)
     
     def _show_tag_tree(self, tag_service: TagService) -> None:
-        """显示标签树"""
+        """
+        显示标签树
+        
+        以树形结构显示所有标签，一级标签为根节点，
+        二级标签为子节点。
+        
+        Args:
+            tag_service: 标签服务实例
+        """
         tag_tree = tag_service.get_tag_tree()
         total = tag_tree.total
         
@@ -301,7 +426,15 @@ class TagManagerCLI:
             print("  (暂无标签)")
     
     def _print_tag_node(self, tag, level: int) -> None:
-        """递归打印标签节点"""
+        """
+        递归打印标签节点
+        
+        以缩进方式打印标签及其子标签。
+        
+        Args:
+            tag: 标签对象
+            level: 当前层级（用于缩进）
+        """
         indent = "  " * level
         level_str = f"[{tag.level}级]" if tag.level else ""
         video_count_str = f"({tag.video_count}个视频)" if hasattr(tag, 'video_count') else ""
@@ -319,7 +452,16 @@ class TagManagerCLI:
         parent_id: Optional[int],
         search: Optional[str]
     ) -> None:
-        """显示标签列表"""
+        """
+        显示标签列表
+        
+        以列表形式显示标签，支持按父标签筛选和搜索。
+        
+        Args:
+            tag_service: 标签服务实例
+            parent_id: 父标签ID筛选
+            search: 搜索关键词
+        """
         if parent_id:
             parent = tag_service.get_tag(parent_id)
             print(f"\n标签列表 (父标签: {parent.name}):\n")
@@ -344,7 +486,17 @@ class TagManagerCLI:
         print(f"\n总计: {result['total']} 个标签")
     
     def show_tag_info(self, tag_id: int) -> None:
-        """显示标签详细信息"""
+        """
+        显示标签详细信息
+        
+        显示标签的完整信息，包括：
+        - 基本信息（ID、名称、层级、描述等）
+        - 统计信息（关联视频数、子标签数）
+        - 子标签列表
+        
+        Args:
+            tag_id: 标签ID
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             
@@ -376,7 +528,14 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def list_videos(self, tag_ids: Optional[List[int]] = None) -> None:
-        """列出视频"""
+        """
+        列出视频
+        
+        列出所有视频或指定标签的视频。
+        
+        Args:
+            tag_ids: 标签ID列表，用于筛选视频
+        """
         with self.db_manager.get_session() as session:
             video_repo = VideoRepository(session)
             video_tag_service = VideoTagService(session)
@@ -404,7 +563,13 @@ class TagManagerCLI:
                 print()
     
     def add_video_tag(self, video_id: int, tag_id: int) -> None:
-        """为视频添加标签"""
+        """
+        为视频添加标签
+        
+        Args:
+            video_id: 视频ID
+            tag_id: 标签ID
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -422,7 +587,13 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def remove_video_tag(self, video_id: int, tag_id: int) -> None:
-        """从视频移除标签"""
+        """
+        从视频移除标签
+        
+        Args:
+            video_id: 视频ID
+            tag_id: 标签ID
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -440,7 +611,15 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def set_video_tags(self, video_id: int, tag_ids: List[int]) -> None:
-        """设置视频的标签（替换现有标签）"""
+        """
+        设置视频的标签（替换现有标签）
+        
+        将视频的标签设置为指定的标签列表，移除不在列表中的标签。
+        
+        Args:
+            video_id: 视频ID
+            tag_ids: 标签ID列表
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -462,7 +641,15 @@ class TagManagerCLI:
         video_ids: List[int],
         tag_ids: List[int]
     ) -> None:
-        """批量为视频添加标签"""
+        """
+        批量为视频添加标签
+        
+        为多个视频批量添加多个标签。
+        
+        Args:
+            video_ids: 视频ID列表
+            tag_ids: 标签ID列表
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -485,7 +672,15 @@ class TagManagerCLI:
         video_ids: List[int],
         tag_ids: List[int]
     ) -> None:
-        """批量从视频移除标签"""
+        """
+        批量从视频移除标签
+        
+        从多个视频批量移除多个标签。
+        
+        Args:
+            video_ids: 视频ID列表
+            tag_ids: 标签ID列表
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -504,7 +699,12 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def show_video_tags(self, video_id: int) -> None:
-        """显示视频的所有标签"""
+        """
+        显示视频的所有标签
+        
+        Args:
+            video_id: 视频ID
+        """
         with self.db_manager.get_session() as session:
             video_tag_service = VideoTagService(session)
             
@@ -529,7 +729,14 @@ class TagManagerCLI:
                 sys.exit(1)
     
     def search_videos_by_tag(self, tag_name: str) -> None:
-        """根据标签名称搜索视频"""
+        """
+        根据标签名称搜索视频
+        
+        查找具有指定标签的所有视频。
+        
+        Args:
+            tag_name: 标签名称
+        """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
             video_tag_service = VideoTagService(session)
@@ -570,12 +777,21 @@ class TagManagerCLI:
             print(f"总计: {len(video_ids)} 个视频")
     
     def close(self) -> None:
-        """关闭数据库连接"""
+        """
+        关闭数据库连接
+        
+        释放数据库资源。
+        """
         self.db_manager.close()
 
 
 def main():
-    """主函数"""
+    """
+    主函数 - 命令行入口
+    
+    解析命令行参数并执行相应的标签管理操作。
+    支持多种子命令，每个子命令有独立的参数。
+    """
     parser = argparse.ArgumentParser(
         description="视频数据库标签管理工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,

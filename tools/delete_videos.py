@@ -1,6 +1,29 @@
 """
 视频条目删除工具
-支持按ID、标题、路径等条件删除数据库中的视频记录
+
+本模块提供视频记录的删除功能，支持多种删除方式：
+- 按ID删除：精确删除指定ID的视频
+- 按标题删除：支持精确匹配和模糊匹配
+- 按路径删除：支持精确匹配和模糊匹配
+- 删除失效记录：删除本地文件不存在的视频记录
+- 批量删除：支持一次性删除多个视频
+
+使用方式：
+    命令行模式：
+        python tools/delete_videos.py --id 1,2,3
+        python tools/delete_videos.py --title "测试" --exact
+        python tools/delete_videos.py --missing --dry-run
+    
+    交互式模式：
+        python tools/delete_videos.py --interactive
+
+注意事项：
+    - 删除操作不可逆，建议先使用 --dry-run 模拟运行
+    - 删除视频记录会同时删除相关的标签关联关系（级联删除）
+    - 本工具仅删除数据库记录，不会删除本地视频文件
+
+作者：Video Library System
+创建时间：2024
 """
 import os
 import sys
@@ -18,9 +41,31 @@ from video_tag_system.models.video import Video
 
 
 class VideoDeleter:
-    """视频删除器"""
+    """
+    视频删除器类
+    
+    提供视频记录的增删改查操作，主要用于从数据库中删除视频记录。
+    支持多种删除条件和批量操作。
+    
+    属性：
+        db_manager: 数据库管理器实例，负责数据库连接和会话管理
+        verbose: 是否输出详细日志信息
+        results: 操作结果统计字典，包含删除数量、跳过数量、错误信息等
+    
+    使用示例：
+        deleter = VideoDeleter(db_url="sqlite:///./video_library.db")
+        result = deleter.delete_by_ids([1, 2, 3])
+        deleter.print_summary()
+    """
     
     def __init__(self, db_url: str = "sqlite:///./video_library.db", verbose: bool = True):
+        """
+        初始化视频删除器
+        
+        Args:
+            db_url: 数据库连接字符串，默认为当前目录下的video_library.db
+            verbose: 是否输出详细日志，默认为True
+        """
         self.db_manager = DatabaseManager(database_url=db_url)
         self.verbose = verbose
         self.results = {
@@ -31,12 +76,28 @@ class VideoDeleter:
         }
     
     def get_video_by_id(self, video_id: int) -> Optional[Video]:
-        """根据ID获取视频"""
+        """
+        根据ID获取单个视频记录
+        
+        Args:
+            video_id: 视频ID
+            
+        Returns:
+            Video对象，如果不存在则返回None
+        """
         with self.db_manager.get_session() as session:
             return session.get(Video, video_id)
     
     def get_videos_by_ids(self, video_ids: List[int]) -> List[Tuple[int, str, str]]:
-        """根据ID列表获取视频，返回 (id, title, file_path) 元组"""
+        """
+        根据ID列表批量获取视频记录
+        
+        Args:
+            video_ids: 视频ID列表
+            
+        Returns:
+            元组列表，每个元组格式为 (id, title, file_path)
+        """
         with self.db_manager.get_session() as session:
             result = session.execute(
                 select(Video.id, Video.title, Video.file_path).where(Video.id.in_(video_ids))
@@ -45,14 +106,18 @@ class VideoDeleter:
     
     def get_videos_by_title(self, title: str, exact: bool = False) -> List[Tuple[int, str, str]]:
         """
-        根据标题获取视频
+        根据标题获取视频记录
+        
+        支持精确匹配和模糊匹配两种模式：
+        - 精确匹配：标题必须完全相同
+        - 模糊匹配：标题包含指定字符串即可
         
         Args:
-            title: 标题
-            exact: 是否精确匹配
+            title: 要搜索的标题字符串
+            exact: 是否精确匹配，默认为False（模糊匹配）
             
         Returns:
-            [(id, title, file_path), ...]
+            元组列表，每个元组格式为 (id, title, file_path)
         """
         with self.db_manager.get_session() as session:
             if exact:
@@ -67,14 +132,18 @@ class VideoDeleter:
     
     def get_videos_by_path(self, path: str, exact: bool = False) -> List[Tuple[int, str, str]]:
         """
-        根据路径获取视频
+        根据文件路径获取视频记录
+        
+        支持精确匹配和模糊匹配两种模式：
+        - 精确匹配：路径必须完全相同
+        - 模糊匹配：路径包含指定字符串即可
         
         Args:
-            path: 路径
-            exact: 是否精确匹配
+            path: 要搜索的路径字符串
+            exact: 是否精确匹配，默认为False（模糊匹配）
             
         Returns:
-            [(id, title, file_path), ...]
+            元组列表，每个元组格式为 (id, title, file_path)
         """
         with self.db_manager.get_session() as session:
             if exact:
@@ -88,7 +157,16 @@ class VideoDeleter:
             return [(row[0], row[1], row[2]) for row in result]
     
     def get_videos_with_missing_files(self) -> List[Tuple[int, str, str]]:
-        """获取本地文件不存在的视频，返回 (id, title, file_path) 元组"""
+        """
+        获取本地文件不存在的视频记录
+        
+        遍历数据库中的所有视频，检查其文件路径对应的文件是否存在。
+        用于清理数据库中的失效记录。
+        
+        Returns:
+            元组列表，每个元组格式为 (id, title, file_path)
+            只包含本地文件不存在的视频
+        """
         with self.db_manager.get_session() as session:
             result = session.execute(
                 select(Video.id, Video.title, Video.file_path)
@@ -100,7 +178,12 @@ class VideoDeleter:
             return missing
     
     def get_all_videos(self) -> List[Tuple[int, str, str]]:
-        """获取所有视频 (id, title, file_path)"""
+        """
+        获取数据库中所有视频记录
+        
+        Returns:
+            元组列表，每个元组格式为 (id, title, file_path)
+        """
         with self.db_manager.get_session() as session:
             result = session.execute(
                 select(Video.id, Video.title, Video.file_path)
@@ -109,10 +192,14 @@ class VideoDeleter:
     
     def delete_video_by_id(self, video_id: int) -> Tuple[bool, str]:
         """
-        根据ID删除视频
+        根据ID删除单个视频记录
         
+        Args:
+            video_id: 要删除的视频ID
+            
         Returns:
-            (成功与否, 消息)
+            元组 (成功与否, 消息)
+            成功时消息为视频标题，失败时为错误信息
         """
         try:
             with self.db_manager.get_session() as session:
@@ -127,10 +214,17 @@ class VideoDeleter:
     
     def delete_videos_batch(self, video_ids: List[int]) -> Tuple[int, List[Tuple[int, str]]]:
         """
-        批量删除视频
+        批量删除视频记录
         
+        在单个事务中删除多个视频记录，提高删除效率。
+        如果某个视频删除失败，不影响其他视频的删除。
+        
+        Args:
+            video_ids: 要删除的视频ID列表
+            
         Returns:
-            (成功数量, 失败列表)
+            元组 (成功数量, 失败列表)
+            失败列表中的每个元素为 (video_id, 错误信息)
         """
         success_count = 0
         failed = []
@@ -158,11 +252,17 @@ class VideoDeleter:
         dry_run: bool = False
     ) -> dict:
         """
-        按ID列表删除
+        按ID列表删除视频
+        
+        先查询匹配的视频，显示给用户确认，然后执行删除。
+        支持模拟运行模式，只显示将要删除的视频而不实际删除。
         
         Args:
             video_ids: 视频ID列表
-            dry_run: 模拟运行
+            dry_run: 是否模拟运行，默认为False
+            
+        Returns:
+            操作结果字典，包含deleted、skipped、errors等字段
         """
         print(f"\n按ID删除: {video_ids}")
         
@@ -196,12 +296,15 @@ class VideoDeleter:
         dry_run: bool = False
     ) -> dict:
         """
-        按标题删除
+        按标题删除视频
         
         Args:
             title: 标题（支持模糊匹配）
-            exact: 精确匹配
-            dry_run: 模拟运行
+            exact: 是否精确匹配，默认为False
+            dry_run: 是否模拟运行，默认为False
+            
+        Returns:
+            操作结果字典
         """
         mode = "精确匹配" if exact else "模糊匹配"
         print(f"\n按标题删除 ({mode}): {title}")
@@ -237,12 +340,15 @@ class VideoDeleter:
         dry_run: bool = False
     ) -> dict:
         """
-        按路径删除
+        按路径删除视频
         
         Args:
             path: 路径（支持模糊匹配）
-            exact: 精确匹配
-            dry_run: 模拟运行
+            exact: 是否精确匹配，默认为False
+            dry_run: 是否模拟运行，默认为False
+            
+        Returns:
+            操作结果字典
         """
         mode = "精确匹配" if exact else "模糊匹配"
         print(f"\n按路径删除 ({mode}): {path}")
@@ -275,8 +381,13 @@ class VideoDeleter:
         """
         删除本地文件不存在的视频记录
         
+        清理数据库中的失效记录，保持数据库与实际文件系统的一致性。
+        
         Args:
-            dry_run: 模拟运行
+            dry_run: 是否模拟运行，默认为False
+            
+        Returns:
+            操作结果字典
         """
         print("\n查找本地文件不存在的视频...")
         
@@ -309,9 +420,15 @@ class VideoDeleter:
         """
         删除所有视频（危险操作）
         
+        此操作将清空数据库中的所有视频记录，需要特别谨慎。
+        需要输入 'DELETE ALL' 进行二次确认。
+        
         Args:
-            dry_run: 模拟运行
-            confirm: 确认删除
+            dry_run: 是否模拟运行，默认为False
+            confirm: 是否已确认删除，默认为False
+            
+        Returns:
+            操作结果字典
         """
         videos = self.get_all_videos()
         
@@ -339,7 +456,18 @@ class VideoDeleter:
         return self.results
     
     def interactive_delete(self):
-        """交互式删除模式"""
+        """
+        交互式删除模式
+        
+        提供菜单驱动的交互界面，用户可以通过选择菜单项来执行各种删除操作。
+        支持的操作包括：
+        1. 按ID删除
+        2. 按标题删除
+        3. 按路径删除
+        4. 删除文件缺失的视频
+        5. 列出所有视频
+        0. 退出
+        """
         print("\n" + "="*60)
         print("交互式视频删除工具")
         print("="*60)
@@ -388,7 +516,14 @@ class VideoDeleter:
                 print("无效选择")
     
     def print_summary(self):
-        """打印结果摘要"""
+        """
+        打印操作结果摘要
+        
+        显示删除操作的统计信息，包括：
+        - 已删除的视频数量
+        - 已跳过的视频数量
+        - 删除失败的视频及错误信息
+        """
         print(f"\n{'='*60}")
         print("删除完成!")
         print(f"{'='*60}")
@@ -402,6 +537,12 @@ class VideoDeleter:
 
 
 def main():
+    """
+    主函数 - 命令行入口
+    
+    解析命令行参数并执行相应的删除操作。
+    支持多种删除模式和选项。
+    """
     parser = argparse.ArgumentParser(
         description='视频条目删除工具 - 从数据库中删除视频记录',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -497,23 +638,23 @@ def main():
         elif args.id:
             ids = [int(x.strip()) for x in args.id.split(',')]
             deleter.delete_by_ids(ids, dry_run=args.dry_run)
+            deleter.print_summary()
         elif args.title:
             deleter.delete_by_title(args.title, exact=args.exact, dry_run=args.dry_run)
+            deleter.print_summary()
         elif args.path:
             deleter.delete_by_path(args.path, exact=args.exact, dry_run=args.dry_run)
+            deleter.print_summary()
         elif args.missing:
             deleter.delete_missing_files(dry_run=args.dry_run)
+            deleter.print_summary()
         elif args.all:
             deleter.delete_all(dry_run=args.dry_run, confirm=args.yes)
+            deleter.print_summary()
         else:
             parser.print_help()
-            return
-        
-        deleter.print_summary()
-        
-    except ValueError as e:
-        print(f"参数错误: {e}")
-        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n操作已取消")
     except Exception as e:
         print(f"错误: {e}")
         sys.exit(1)

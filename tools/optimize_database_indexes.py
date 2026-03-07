@@ -1,6 +1,30 @@
 """
 数据库索引优化脚本
-用于在现有数据库上添加性能优化索引
+
+本模块用于优化数据库性能，主要通过创建索引来加速查询操作。
+优化内容包括：
+- 创建单列索引：为常用查询字段创建索引
+- 创建复合索引：为多字段联合查询创建索引
+- 执行数据库优化命令：PRAGMA optimize 和 ANALYZE
+
+索引优化说明：
+- videos表：title, created_at, updated_at, duration, file_size
+- tags表：name, parent_id, sort_order, 复合索引(name, parent_id)
+- video_tags表：video_id, tag_id, 复合索引(video_id, tag_id)
+
+使用方式：
+    python tools/optimize_database_indexes.py
+    python tools/optimize_database_indexes.py --info
+    python tools/optimize_database_indexes.py --db "sqlite:///./video_library.db"
+
+性能提升效果：
+- 视频搜索查询速度提升（title索引）
+- 视频列表排序速度提升（created_at, updated_at索引）
+- 标签筛选查询速度提升（video_tags复合索引）
+- 标签树查询速度提升（parent_id, sort_order索引）
+
+作者：Video Library System
+创建时间：2024
 """
 import sys
 import os
@@ -12,7 +36,19 @@ from video_tag_system.core.database import DatabaseManager
 
 
 def check_index_exists(session, table_name, index_name):
-    """检查索引是否已存在"""
+    """
+    检查索引是否已存在
+    
+    查询sqlite_master表判断指定索引是否已创建。
+    
+    Args:
+        session: 数据库会话
+        table_name: 表名
+        index_name: 索引名
+        
+    Returns:
+        bool: 索引存在返回True，否则返回False
+    """
     result = session.execute(text(f"""
         SELECT name FROM sqlite_master 
         WHERE type='index' AND tbl_name='{table_name}' AND name='{index_name}'
@@ -21,7 +57,21 @@ def check_index_exists(session, table_name, index_name):
 
 
 def create_index_if_not_exists(session, table_name, index_name, column_name, unique=False):
-    """如果索引不存在则创建"""
+    """
+    如果索引不存在则创建
+    
+    创建单列索引，如果索引已存在则跳过。
+    
+    Args:
+        session: 数据库会话
+        table_name: 表名
+        index_name: 索引名
+        column_name: 列名
+        unique: 是否创建唯一索引，默认为False
+        
+    Returns:
+        bool: 创建成功返回True，索引已存在返回False
+    """
     if check_index_exists(session, table_name, index_name):
         print(f"  ✓ 索引 {index_name} 已存在")
         return False
@@ -34,7 +84,20 @@ def create_index_if_not_exists(session, table_name, index_name, column_name, uni
 
 
 def create_composite_index_if_not_exists(session, table_name, index_name, columns):
-    """如果复合索引不存在则创建"""
+    """
+    如果复合索引不存在则创建
+    
+    创建多列复合索引，用于优化多字段联合查询。
+    
+    Args:
+        session: 数据库会话
+        table_name: 表名
+        index_name: 索引名
+        columns: 列名列表
+        
+    Returns:
+        bool: 创建成功返回True，索引已存在返回False
+    """
     if check_index_exists(session, table_name, index_name):
         print(f"  ✓ 索引 {index_name} 已存在")
         return False
@@ -47,13 +110,36 @@ def create_composite_index_if_not_exists(session, table_name, index_name, column
 
 
 def analyze_table_stats(session, table_name):
-    """分析表统计信息"""
+    """
+    分析表统计信息
+    
+    获取表中的记录总数。
+    
+    Args:
+        session: 数据库会话
+        table_name: 表名
+        
+    Returns:
+        int: 表中的记录数
+    """
     result = session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
     return result
 
 
 def optimize_database(database_url: str = "sqlite:///./video_library.db"):
-    """优化数据库索引"""
+    """
+    优化数据库索引
+    
+    主优化函数，执行以下操作：
+    1. 显示数据库统计信息
+    2. 为videos表创建索引
+    3. 为tags表创建索引
+    4. 为video_tags表创建索引
+    5. 执行数据库优化命令
+    
+    Args:
+        database_url: 数据库连接字符串，默认为当前目录下的video_library.db
+    """
     print("=" * 70)
     print("数据库性能优化工具")
     print("=" * 70)
@@ -150,7 +236,14 @@ def optimize_database(database_url: str = "sqlite:///./video_library.db"):
 
 
 def show_index_info(database_url: str = "sqlite:///./video_library.db"):
-    """显示数据库索引信息"""
+    """
+    显示数据库索引信息
+    
+    列出数据库中所有表的索引信息，包括索引名称和创建语句。
+    
+    Args:
+        database_url: 数据库连接字符串，默认为当前目录下的video_library.db
+    """
     print("=" * 70)
     print("数据库索引信息")
     print("=" * 70)
