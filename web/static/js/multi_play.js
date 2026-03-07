@@ -10,7 +10,7 @@
  * - 自动隐藏控制栏
  * 
  * 主要功能模块：
- * 1. 视频加载模块：loadVideos、initShuffledIndices、initPlayers
+ * 1. 视频加载模块：loadVideos、initAllShuffledIndices、initPlayers
  * 2. 播放控制模块：playNextVideo、togglePlay、getNextAvailableIndex
  * 3. 音量控制模块：setVolume、toggleMute、toggleAllMute
  * 4. 进度控制模块：seekVideo、updateTimeDisplay
@@ -28,8 +28,8 @@ let videos = [];
 /** 四个播放器实例数组 */
 let players = [];
 
-/** 随机打乱后的视频索引数组 */
-let shuffledIndices = [];
+/** 每个播放器独立的随机打乱后的视频索引数组（二维数组） */
+let shuffledIndicesArray = [[], [], [], []];
 
 /** 每个播放器当前的随机索引位置 */
 let currentIndices = [0, 0, 0, 0];
@@ -153,7 +153,7 @@ async function loadVideos() {
             videos = result.data.videos;
             videoCount.textContent = `${videos.length} videos`;
             
-            initShuffledIndices();
+            initAllShuffledIndices();
             initPlayers();
             
             loadingScreen.style.display = 'none';
@@ -166,7 +166,7 @@ async function loadVideos() {
             videos = result.data.videos;
             videoCount.textContent = `${videos.length} videos`;
             
-            initShuffledIndices();
+            initAllShuffledIndices();
             initPlayers();
             
             loadingScreen.style.display = 'none';
@@ -191,18 +191,32 @@ async function loadVideos() {
 }
 
 /**
- * 初始化随机播放索引
+ * 初始化指定播放器的随机播放索引
  * 
- * 创建视频索引数组并使用 Fisher-Yates 算法进行随机打乱。
+ * 为指定播放器创建独立的视频索引数组并使用 Fisher-Yates 算法进行随机打乱。
+ * 
+ * @param {number} playerIndex - 播放器索引（0-3）
  */
-function initShuffledIndices() {
-    shuffledIndices = [];
+function initShuffledIndices(playerIndex) {
+    const indices = [];
     for (let i = 0; i < videos.length; i++) {
-        shuffledIndices.push(i);
+        indices.push(i);
     }
-    for (let i = shuffledIndices.length - 1; i > 0; i--) {
+    for (let i = indices.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    shuffledIndicesArray[playerIndex] = indices;
+}
+
+/**
+ * 初始化所有播放器的随机播放索引
+ * 
+ * 为四个播放器分别创建独立的随机索引数组。
+ */
+function initAllShuffledIndices() {
+    for (let i = 0; i < 4; i++) {
+        initShuffledIndices(i);
     }
 }
 
@@ -244,25 +258,26 @@ function startAllPlayers() {
 /**
  * 获取下一个可用的视频索引
  * 
- * 从随机索引数组中获取下一个视频，确保不与其他播放器正在播放的视频重复。
- * 如果所有视频都已被播放过，则重新打乱索引数组。
+ * 从该播放器独立的随机索引数组中获取下一个视频，确保不与其他播放器正在播放的视频重复。
+ * 如果所有视频都已被播放过，则重新为该播放器生成随机索引数组。
  * 
  * @param {number} playerIndex - 播放器索引（0-3）
  * @returns {number} 视频在原数组中的索引
  */
 function getNextAvailableIndex(playerIndex) {
     const otherPlayingIds = currentVideoIds.filter((id, idx) => idx !== playerIndex);
+    const shuffledIndices = shuffledIndicesArray[playerIndex];
     
     let attempts = 0;
     const maxAttempts = videos.length;
     
     while (attempts < maxAttempts) {
         if (currentIndices[playerIndex] >= shuffledIndices.length) {
-            initShuffledIndices();
+            initShuffledIndices(playerIndex);
             currentIndices[playerIndex] = 0;
         }
         
-        const videoIndex = shuffledIndices[currentIndices[playerIndex]];
+        const videoIndex = shuffledIndicesArray[playerIndex][currentIndices[playerIndex]];
         const videoId = videos[videoIndex].id;
         
         if (!otherPlayingIds.includes(videoId)) {
@@ -274,7 +289,7 @@ function getNextAvailableIndex(playerIndex) {
         attempts++;
     }
     
-    return shuffledIndices[0];
+    return shuffledIndicesArray[playerIndex][0];
 }
 
 /**
