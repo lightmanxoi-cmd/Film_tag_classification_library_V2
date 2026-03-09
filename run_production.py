@@ -1,11 +1,39 @@
 """
 生产环境启动脚本
 使用 Waitress WSGI 服务器提供高性能服务
+
+配置说明:
+    所有配置通过环境变量或 .env 文件设置
+    复制 .env.example 为 .env 并修改配置值
+
+必需配置:
+    VIDEO_BASE_PATH: 视频文件存储路径
+    SECRET_KEY: 应用密钥（生产环境必须设置）
+
+可选配置:
+    DEFAULT_PASSWORD: 初始默认密码
+    DATABASE_URL: 数据库连接URL
+    INACTIVITY_TIMEOUT: 会话超时时间
 """
 import os
 import sys
 import argparse
 from pathlib import Path
+
+
+def load_env_file():
+    """加载 .env 文件"""
+    env_file = Path('.env')
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key and key not in os.environ:
+                        os.environ[key] = value
 
 
 WAITRESS_CONFIG = {
@@ -28,10 +56,11 @@ def check_environment():
     print("生产环境启动检查")
     print("=" * 60)
     
-    # 检查必要文件
+    errors = []
+    warnings = []
+    
     required_files = [
         'web_app.py',
-        'video_library.db',
         'web/static',
         'web/templates'
     ]
@@ -42,27 +71,72 @@ def check_environment():
             missing_files.append(file)
     
     if missing_files:
-        print(f"❌ 缺少必要文件: {', '.join(missing_files)}")
-        return False
+        errors.append(f"缺少必要文件: {', '.join(missing_files)}")
+    else:
+        print("✓ 所有必要文件已找到")
     
-    print("✓ 所有必要文件已找到")
-    
-    # 检查数据库
     db_path = 'video_library.db'
     if os.path.exists(db_path):
         db_size = os.path.getsize(db_path) / (1024 * 1024)
         print(f"✓ 数据库文件: {db_path} ({db_size:.2f} MB)")
-    
-    # 检查视频路径
-    video_path = os.environ.get('VIDEO_BASE_PATH', 'F:\\666')
-    if os.path.exists(video_path):
-        print(f"✓ 视频目录: {video_path}")
     else:
-        print(f"⚠ 视频目录不存在: {video_path}")
-        print("  请设置正确的 VIDEO_BASE_PATH 环境变量")
+        warnings.append(f"数据库文件不存在: {db_path}（首次运行将创建）")
+    
+    video_path = os.environ.get('VIDEO_BASE_PATH')
+    if video_path:
+        if os.path.exists(video_path):
+            print(f"✓ 视频目录: {video_path}")
+        else:
+            errors.append(f"视频目录不存在: {video_path}")
+    else:
+        errors.append("VIDEO_BASE_PATH 环境变量未设置")
+        print("  请通过以下方式设置:")
+        print("    1. 创建 .env 文件并添加: VIDEO_BASE_PATH=/path/to/videos")
+        print("    2. 或设置环境变量: set VIDEO_BASE_PATH=/path/to/videos")
+    
+    secret_key = os.environ.get('SECRET_KEY')
+    if secret_key:
+        if len(secret_key) < 16:
+            warnings.append("SECRET_KEY 长度过短，建议至少16个字符")
+        else:
+            print("✓ SECRET_KEY 已设置")
+    else:
+        warnings.append("SECRET_KEY 未设置，将自动生成（生产环境建议手动设置）")
+    
+    default_password = os.environ.get('DEFAULT_PASSWORD')
+    if default_password:
+        warnings.append("DEFAULT_PASSWORD 已设置，请确保首次登录后修改密码")
+    
+    print("-" * 60)
+    
+    if warnings:
+        print("警告:")
+        for w in warnings:
+            print(f"  ⚠ {w}")
+    
+    if errors:
+        print("错误:")
+        for e in errors:
+            print(f"  ❌ {e}")
+        print("-" * 60)
+        print("请修复以上错误后重试")
+        print("=" * 60)
+        return False
+    
+    if not warnings:
+        print("✓ 配置检查通过")
     
     print("=" * 60)
     return True
+
+
+def validate_config():
+    """使用配置验证模块验证配置"""
+    try:
+        from web.core.config_validator import print_config_status
+        return print_config_status()
+    except ImportError:
+        return check_environment()
 
 
 def run_production_server(host='0.0.0.0', port=5000, threads=None):
@@ -121,6 +195,10 @@ def main():
   python run_production.py                    # 使用默认配置启动
   python run_production.py -p 8080            # 使用8080端口
   python run_production.py -H 127.0.0.1 -p 5000 -t 8
+
+配置:
+  复制 .env.example 为 .env 并修改配置值
+  必须设置 VIDEO_BASE_PATH 环境变量
         """
     )
     
@@ -150,9 +228,17 @@ def main():
         help='仅检查环境，不启动服务器'
     )
     
+    parser.add_argument(
+        '--no-env',
+        action='store_true',
+        help='不加载 .env 文件'
+    )
+    
     args = parser.parse_args()
     
-    # 检查环境
+    if not args.no_env:
+        load_env_file()
+    
     if not check_environment():
         sys.exit(1)
     
@@ -160,7 +246,6 @@ def main():
         print("环境检查完成，退出。")
         sys.exit(0)
     
-    # 启动服务器
     run_production_server(args.host, args.port, args.threads)
 
 

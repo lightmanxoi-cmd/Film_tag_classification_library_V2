@@ -221,15 +221,16 @@ def verify_password(password: str, password_hash: str) -> bool:
             return False
 
 
-def init_default_password(base_dir: str = None, default_password: str = '13245768') -> Tuple[dict, bool]:
+def init_default_password(base_dir: str = None, default_password: str = None) -> Tuple[dict, bool]:
     """
     初始化默认密码
     
     如果配置文件中不存在密码哈希，则创建默认密码。
+    默认密码优先从环境变量 DEFAULT_PASSWORD 读取，如果未设置则提示用户设置。
     
     Args:
         base_dir: 基础目录
-        default_password: 默认密码，默认'13245768'
+        default_password: 默认密码，如果为None则从环境变量读取
     
     Returns:
         Tuple[dict, bool]: (配置字典, 是否是新创建的)
@@ -238,22 +239,49 @@ def init_default_password(base_dir: str = None, default_password: str = '1324576
         - 创建或更新.auth_config.json文件
         - 生成会话密钥
     
+    Environment Variables:
+        DEFAULT_PASSWORD: 默认密码（推荐设置）
+    
     Example:
         config, is_new = init_default_password()
         if is_new:
             print("请使用默认密码登录后修改密码")
+    
+    Security:
+        - 生产环境强烈建议设置 DEFAULT_PASSWORD 环境变量
+        - 首次运行后请立即修改密码
     """
     config = load_auth_config(base_dir)
     is_new = False
     
     if not config.get('password_hash'):
-        password_hash = hash_password(default_password)
-        config['password_hash'] = password_hash
-        config['session_secret'] = secrets.token_hex(32)
-        save_auth_config(config, base_dir)
-        is_new = True
-        print(f"已设置默认密码: {default_password}")
-        print("请登录后及时修改密码！")
+        if default_password is None:
+            default_password = os.environ.get('DEFAULT_PASSWORD')
+        
+        if default_password:
+            password_hash = hash_password(default_password)
+            config['password_hash'] = password_hash
+            config['session_secret'] = secrets.token_hex(32)
+            save_auth_config(config, base_dir)
+            is_new = True
+            print("=" * 60)
+            print("安全提示: 已设置初始密码")
+            print("=" * 60)
+            print("请登录后立即修改密码！")
+            print("=" * 60)
+        else:
+            print("=" * 60)
+            print("警告: 未设置初始密码")
+            print("=" * 60)
+            print("请通过以下方式之一设置密码:")
+            print("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
+            print("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
+            print("  3. 首次访问时系统会引导您设置密码")
+            print("=" * 60)
+            config['session_secret'] = secrets.token_hex(32)
+            config['password_pending'] = True
+            save_auth_config(config, base_dir)
+            is_new = True
     
     return config, is_new
 

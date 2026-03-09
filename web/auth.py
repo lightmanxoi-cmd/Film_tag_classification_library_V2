@@ -44,8 +44,21 @@ Argon2参数：
     - 会话密钥自动生成
     - 安全Cookie设置
 
-初始密码：
-    首次运行时自动设置默认密码：13245768
+初始密码设置：
+    首次运行时，密码通过以下方式设置：
+    1. 从环境变量 DEFAULT_PASSWORD 读取（推荐）
+    2. 如果未设置环境变量，系统会提示设置密码
+    
+    示例:
+        # Windows
+        set DEFAULT_PASSWORD=your_secure_password
+        
+        # Linux/Mac
+        export DEFAULT_PASSWORD=your_secure_password
+        
+        # 或在 .env 文件中添加
+        DEFAULT_PASSWORD=your_secure_password
+    
     请登录后及时修改密码！
 """
 import os
@@ -313,9 +326,25 @@ class AuthManager:
         self._init_default_password()
     
     def _init_default_password(self):
-        """初始化默认密码，如果不存在则设置"""
+        """初始化默认密码，如果不存在则从环境变量读取或提示设置"""
         if not self.config.get_password_hash():
-            self.set_password('13245768')
+            default_password = os.environ.get('DEFAULT_PASSWORD')
+            if default_password:
+                self.set_password(default_password)
+                print("=" * 60)
+                print("安全提示: 已从环境变量设置初始密码")
+                print("=" * 60)
+                print("请登录后立即修改密码！")
+                print("=" * 60)
+            else:
+                print("=" * 60)
+                print("警告: 未设置初始密码")
+                print("=" * 60)
+                print("请通过以下方式之一设置密码:")
+                print("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
+                print("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
+                print("  3. 首次访问时系统会引导您设置密码")
+                print("=" * 60)
     
     def set_password(self, password: str) -> bool:
         """

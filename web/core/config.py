@@ -15,6 +15,7 @@ Flask应用配置模块
     - VIDEO_BASE_PATH: 视频文件基础路径
     - INACTIVITY_TIMEOUT: 会话超时时间（秒）
     - MAX_CONTENT_LENGTH: 最大上传文件大小
+    - DEFAULT_PASSWORD: 初始默认密码
 
 使用示例：
     from web.core.config import config
@@ -26,16 +27,86 @@ Flask应用配置模块
     app.config.from_object(config['production'])
 
 环境变量：
-    - SECRET_KEY: 应用密钥（可选，默认自动生成）
+    - SECRET_KEY: 应用密钥（生产环境必须设置）
     - DATABASE_URL: 数据库URL（可选，默认SQLite）
-    - VIDEO_BASE_PATH: 视频路径（可选，默认F:\\666）
+    - VIDEO_BASE_PATH: 视频路径（必须设置）
     - FLASK_ENV: 环境名称（development/production/testing）
     - INACTIVITY_TIMEOUT: 会话超时时间
     - CACHE_CLEANUP_INTERVAL: 缓存清理间隔
+    - DEFAULT_PASSWORD: 初始默认密码（可选，首次运行时设置）
+
+安全建议：
+    - 生产环境必须设置 SECRET_KEY 环境变量
+    - 生产环境必须设置 VIDEO_BASE_PATH 环境变量
+    - 生产环境建议设置 DEFAULT_PASSWORD 或在首次运行后立即修改密码
 """
 import os
 import secrets
+import warnings
 from datetime import timedelta
+from typing import Optional
+
+
+def _get_video_base_path() -> Optional[str]:
+    """
+    获取视频基础路径
+    
+    优先从环境变量读取，如果未设置则返回 None 并发出警告。
+    
+    Returns:
+        Optional[str]: 视频路径或 None
+    """
+    video_path = os.environ.get('VIDEO_BASE_PATH')
+    
+    if video_path:
+        return video_path
+    
+    warnings.warn(
+        "VIDEO_BASE_PATH 环境变量未设置。"
+        "请创建 .env 文件或设置环境变量来配置视频文件路径。"
+        "示例: VIDEO_BASE_PATH=/path/to/videos",
+        UserWarning,
+        stacklevel=3
+    )
+    
+    return None
+
+
+def _get_secret_key() -> str:
+    """
+    获取应用密钥
+    
+    优先从环境变量读取，如果未设置则自动生成（仅适用于开发环境）。
+    
+    Returns:
+        str: 应用密钥
+    """
+    secret_key = os.environ.get('SECRET_KEY')
+    
+    if secret_key:
+        return secret_key
+    
+    warnings.warn(
+        "SECRET_KEY 环境变量未设置，已自动生成临时密钥。"
+        "生产环境请务必设置 SECRET_KEY 环境变量！",
+        UserWarning,
+        stacklevel=3
+    )
+    
+    return secrets.token_hex(32)
+
+
+def _get_default_password() -> Optional[str]:
+    """
+    获取默认密码
+    
+    从环境变量读取默认密码，如果未设置则返回 None。
+    首次运行时如果没有设置，系统会提示用户设置密码。
+    
+    Returns:
+        Optional[str]: 默认密码或 None
+    """
+    return os.environ.get('DEFAULT_PASSWORD')
 
 
 class Config:
@@ -59,9 +130,10 @@ class Config:
         MAX_CONTENT_LENGTH: 最大请求内容长度（10GB）
         JSON_AS_ASCII: JSON是否使用ASCII编码
         JSON_SORT_KEYS: JSON是否排序键
+        DEFAULT_PASSWORD: 初始默认密码
     """
     
-    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+    SECRET_KEY = _get_secret_key()
     
     SESSION_COOKIE_SECURE = False
     SESSION_COOKIE_HTTPONLY = True
@@ -71,10 +143,10 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///./video_library.db'
     DATABASE_ECHO = False
     
-    VIDEO_BASE_PATH = os.environ.get('VIDEO_BASE_PATH') or 'F:\\666'
+    VIDEO_BASE_PATH = _get_video_base_path()
     
-    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', 1800))
-    CACHE_CLEANUP_INTERVAL = int(os.environ.get('CACHE_CLEANUP_INTERVAL', 300))
+    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', '1800'))
+    CACHE_CLEANUP_INTERVAL = int(os.environ.get('CACHE_CLEANUP_INTERVAL', '300'))
     
     AUTH_CONFIG_FILE = '.auth_config.json'
     
@@ -82,6 +154,8 @@ class Config:
     
     JSON_AS_ASCII = False
     JSON_SORT_KEYS = False
+    
+    DEFAULT_PASSWORD = _get_default_password()
     
     @classmethod
     def init_app(cls, app):
@@ -94,6 +168,23 @@ class Config:
             app: Flask应用实例
         """
         pass
+    
+    @classmethod
+    def validate(cls) -> tuple:
+        """
+        验证配置
+        
+        Returns:
+            tuple: (是否有效, 错误列表, 警告列表)
+        """
+        from web.core.config_validator import validate_config
+        result = validate_config({
+            'SECRET_KEY': cls.SECRET_KEY,
+            'DATABASE_URL': cls.DATABASE_URL,
+            'VIDEO_BASE_PATH': cls.VIDEO_BASE_PATH,
+            'AUTH_CONFIG_FILE': cls.AUTH_CONFIG_FILE,
+        })
+        return result.is_valid, result.errors, result.warnings
 
 
 class DevelopmentConfig(Config):
@@ -172,10 +263,12 @@ class TestingConfig(Config):
     Attributes:
         TESTING: 启用测试模式
         DATABASE_URL: 使用内存SQLite数据库
+        VIDEO_BASE_PATH: 测试用临时目录
     """
     
     TESTING = True
     DATABASE_URL = 'sqlite:///:memory:'
+    VIDEO_BASE_PATH = None
 
 
 config = {

@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 from typing import Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -43,6 +43,13 @@ class Settings(BaseSettings):
         batch_size: 批量操作时的批次大小，影响导入/导出性能
         log_level: 日志输出级别（DEBUG/INFO/WARNING/ERROR）
     """
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="VTS_",
+        extra="ignore"
+    )
     
     database_url: str = Field(
         default="sqlite:///./video_tag_system.db",
@@ -83,12 +90,6 @@ class Settings(BaseSettings):
         default="INFO",
         description="日志级别，可选值：DEBUG、INFO、WARNING、ERROR、CRITICAL"
     )
-    
-    class Config:
-        """Pydantic 配置类"""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        env_prefix = "VTS_"  # 环境变量前缀，如 VTS_DATABASE_URL
     
     @property
     def backup_path(self) -> Path:
