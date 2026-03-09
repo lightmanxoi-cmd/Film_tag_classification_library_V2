@@ -270,6 +270,8 @@ def get_videos_by_tags_advanced():
             {"分类1": [tag_id1, tag_id2], "分类2": [tag_id3]}
         page: 页码
         page_size: 每页数量
+        random_order: 是否随机排序
+        random_seed: 随机种子（用于保持随机顺序一致）
     
     Returns:
         JSON响应，包含视频列表和分页信息
@@ -282,13 +284,17 @@ def get_videos_by_tags_advanced():
                 "地区": [5, 6]
             },
             "page": 1,
-            "page_size": 50
+            "page_size": 50,
+            "random_order": true,
+            "random_seed": 12345
         }
     """
     data = request.get_json()
     tags_by_category = data.get('tags_by_category', {})
     page = data.get('page', 1)
     page_size = data.get('page_size', 50)
+    random_order = data.get('random_order', False)
+    random_seed = data.get('random_seed', None)
     
     if not tags_by_category:
         return APIResponse.success(data={
@@ -301,18 +307,21 @@ def get_videos_by_tags_advanced():
     
     cache = get_cache()
     category_str = str(sorted([(k, sorted(v)) for k, v in tags_by_category.items()]))
-    cache_key = f"videos:advanced:{hash(category_str)}:page:{page}:size:{page_size}"
+    cache_key = f"videos:advanced:{hash(category_str)}:page:{page}:size:{page_size}:random:{random_order}:seed:{random_seed or 0}"
     
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
+    if not random_order:
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return APIResponse.success(data=cached_result, cached=True)
     
     video_svc, tag_svc, video_tag_svc, _ = get_services()
     
     result = video_svc.list_videos_by_tags_advanced(
         tags_by_category=tags_by_category,
         page=page,
-        page_size=page_size
+        page_size=page_size,
+        random_order=random_order,
+        random_seed=random_seed
     )
     
     from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator

@@ -45,6 +45,9 @@ let touchStartY = 0;
 /** 随机种子（用于随机排序） */
 let randomSeed = Date.now();
 
+/** 当前是否处于随机排序模式 */
+let isRandomOrder = false;
+
 /** 高级筛选选中的标签ID列表 */
 let selectedFilterTags = [];
 
@@ -551,17 +554,34 @@ function renderPagination(data) {
         return;
     }
     
+    const prevOnClick = Object.keys(selectedFilterTagsByCategory).length > 0
+        ? `goToAdvancedFilterPage(${data.page - 1})`
+        : `loadVideos(${data.page - 1})`;
+    const nextOnClick = Object.keys(selectedFilterTagsByCategory).length > 0
+        ? `goToAdvancedFilterPage(${data.page + 1})`
+        : `loadVideos(${data.page + 1})`;
+    
     let html = `
-        <button onclick="loadVideos(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}>
+        <button onclick="${prevOnClick}" ${data.page <= 1 ? 'disabled' : ''}>
             上一页
         </button>
         <span class="page-info">第 ${data.page} / ${data.total_pages} 页 (共 ${data.total} 部)</span>
-        <button onclick="loadVideos(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}>
+        <button onclick="${nextOnClick}" ${data.page >= data.total_pages ? 'disabled' : ''}>
             下一页
         </button>
     `;
     
     container.innerHTML = html;
+}
+
+/**
+ * 高级筛选模式下的翻页
+ * 
+ * @param {number} page - 目标页码
+ */
+function goToAdvancedFilterPage(page) {
+    currentPage = page;
+    loadVideosByTagsAdvanced(selectedFilterTagsByCategory, false);
 }
 
 /* ==================== 筛选模块 ==================== */
@@ -584,6 +604,9 @@ function filterByTag(tagId, tagName) {
     });
     
     currentTagIds = [tagId];
+    selectedFilterTagsByCategory = {};
+    isRandomOrder = false;
+    randomSeed = Date.now();
     
     // 显示当前筛选条件
     const filterContainer = document.getElementById('currentFilter');
@@ -606,6 +629,7 @@ function clearFilter() {
     selectedFilterTags = [];
     selectedFilterTagsByCategory = {};
     randomSeed = Date.now();
+    isRandomOrder = false;
     
     document.querySelectorAll('.tag-child').forEach(el => {
         el.classList.remove('active');
@@ -1150,6 +1174,8 @@ async function applyAdvancedFilter() {
     
     currentTagIds = [...selectedFilterTags];
     currentPage = 1;
+    isRandomOrder = false;
+    randomSeed = Date.now();
     
     // 显示筛选条件
     const filterContainer = document.getElementById('currentFilter');
@@ -1198,6 +1224,9 @@ async function applyAdvancedFilter() {
 
 /**
  * 随机打乱视频顺序
+ * 
+ * 生成新的随机种子，对所有筛选结果进行整体随机排序，
+ * 然后从第一页开始显示。
  */
 async function shuffleVideos() {
     if (Object.keys(selectedFilterTagsByCategory).length === 0) {
@@ -1206,6 +1235,10 @@ async function shuffleVideos() {
     
     const shuffleBtn = document.getElementById('shuffleBtn');
     shuffleBtn.classList.add('shuffling');
+    
+    randomSeed = Date.now();
+    isRandomOrder = true;
+    currentPage = 1;
     
     await loadVideosByTagsAdvanced(selectedFilterTagsByCategory, true);
     
@@ -1225,26 +1258,29 @@ async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
     container.innerHTML = '<div class="loading">加载中...</div>';
     
     try {
+        const requestBody = {
+            tags_by_category: tagsByCategory,
+            page: currentPage,
+            page_size: 50
+        };
+        
+        if (shuffle || isRandomOrder) {
+            requestBody.random_order = true;
+            requestBody.random_seed = randomSeed;
+        }
+        
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                tags_by_category: tagsByCategory,
-                page: currentPage,
-                page_size: 50
-            })
+            body: JSON.stringify(requestBody)
         });
         
         const result = await response.json();
         
         if (result.success) {
-            let videos = result.data.videos;
-            if (shuffle) {
-                videos = shuffleArray(videos);
-            }
-            renderVideos(videos);
+            renderVideos(result.data.videos);
             renderPagination(result.data);
         }
     } catch (error) {

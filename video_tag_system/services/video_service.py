@@ -300,7 +300,9 @@ class VideoService:
         self,
         tags_by_category: dict,
         page: int = 1,
-        page_size: int = 20
+        page_size: int = 20,
+        random_order: bool = False,
+        random_seed: Optional[int] = None
     ) -> VideoListResponse:
         """
         高级标签筛选视频
@@ -316,6 +318,8 @@ class VideoService:
                 格式: {category_id: [tag_id1, tag_id2, ...], ...}
             page: 页码
             page_size: 每页数量
+            random_order: 是否随机排序
+            random_seed: 随机种子，用于复现随机排序结果
         
         Returns:
             VideoListResponse: 分页响应对象
@@ -343,7 +347,9 @@ class VideoService:
         videos, total = self.video_repo.list_by_tags_advanced(
             tags_by_category=tags_by_category,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            random_order=random_order,
+            random_seed=random_seed
         )
         
         items = [self._to_response(v) for v in videos]

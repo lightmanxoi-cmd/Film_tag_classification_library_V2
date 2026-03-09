@@ -395,7 +395,9 @@ class VideoRepository:
         self,
         tags_by_category: dict,
         page: int = 1,
-        page_size: int = 20
+        page_size: int = 20,
+        random_order: bool = False,
+        random_seed: Optional[int] = None
     ) -> Tuple[List[Video], int]:
         """
         高级标签筛选
@@ -411,6 +413,8 @@ class VideoRepository:
                 格式: {category_id: [tag_id1, tag_id2, ...], ...}
             page: 页码
             page_size: 每页数量
+            random_order: 是否随机排序
+            random_seed: 随机种子，用于复现随机排序结果
             
         Returns:
             Tuple[List[Video], int]: (视频列表, 总记录数)
@@ -444,12 +448,31 @@ class VideoRepository:
         
         total = self.session.execute(count_stmt).scalar()
         
-        stmt = stmt.order_by(Video.created_at.desc())
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        
-        videos = list(self.session.execute(stmt).scalars().all())
-        
-        return videos, total
+        if random_order and random_seed is not None:
+            random.seed(random_seed)
+            all_ids_stmt = select(Video.id).where(and_(*conditions)).distinct()
+            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
+            random.shuffle(all_ids)
+            
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            page_ids = all_ids[start_idx:end_idx]
+            
+            if not page_ids:
+                return [], total
+            
+            stmt = select(Video).where(Video.id.in_(page_ids))
+            videos = list(self.session.execute(stmt).scalars().all())
+            
+            id_to_video = {v.id: v for v in videos}
+            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
+            
+            return ordered_videos, total
+        else:
+            stmt = stmt.order_by(Video.created_at.desc())
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            videos = list(self.session.execute(stmt).scalars().all())
+            return videos, total
     
     def exists_by_file_path(self, file_path: str) -> bool:
         """

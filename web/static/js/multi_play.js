@@ -135,6 +135,7 @@ async function loadVideos() {
     }
     
     try {
+        const randomSeed = Date.now();
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
             method: 'POST',
             headers: {
@@ -143,7 +144,9 @@ async function loadVideos() {
             body: JSON.stringify({
                 tags_by_category: tagsByCategory,
                 page: 1,
-                page_size: 1000
+                page_size: 1000,
+                random_order: true,
+                random_seed: randomSeed
             })
         });
         
