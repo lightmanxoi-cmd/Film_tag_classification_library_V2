@@ -1,6 +1,8 @@
 python tag_manager.py create "3D" --parent-name "演员"
 python video_importer.py --interactive
 
+cd E:\BaiduSyncdisk\Program20260115\Film_tag_classification_library_V2
+
 python tools/tag_manager.py create "典藏"
 python tools/tag_manager.py create "典藏" --parent-name "典藏"
 python tools/video_importer.py --interactive
@@ -17,6 +19,8 @@ python tools/video_tag_editor.py
 后入-躺
 后入-站
 后入-趴
+女上
+正入-站
 
 
 演员
@@ -27,5 +31,7 @@ python tools/video_tag_editor.py
 
 袜子类型
 白丝
+黑色渔网
+黑色过膝袜
 
 
