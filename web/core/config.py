@@ -145,7 +145,7 @@ class Config:
     
     VIDEO_BASE_PATH = _get_video_base_path()
     
-    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', '1800'))
+    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', '600'))
     CACHE_CLEANUP_INTERVAL = int(os.environ.get('CACHE_CLEANUP_INTERVAL', '300'))
     
     AUTH_CONFIG_FILE = '.auth_config.json'
@@ -233,25 +233,20 @@ class ProductionConfig(Config):
         """
         Config.init_app(app)
         
-        import logging
-        from logging.handlers import RotatingFileHandler
+        from video_tag_system.utils.logger import setup_logging, get_logger
         
-        if not os.path.exists('logs'):
-            os.mkdir('logs')
-        
-        file_handler = RotatingFileHandler(
-            'logs/web_app.log',
-            maxBytes=10 * 1024 * 1024,
-            backupCount=10,
-            encoding='utf-8'
+        setup_logging(
+            level='INFO',
+            log_dir='logs',
+            json_format=False,
+            max_size=10,
+            backup_count=10,
+            console_output=True,
+            console_level='WARNING'
         )
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
-        app.logger.setLevel(logging.INFO)
-        app.logger.info('Web应用启动')
+        
+        logger = get_logger('web.app')
+        logger.info('Web应用启动')
 
 
 class TestingConfig(Config):

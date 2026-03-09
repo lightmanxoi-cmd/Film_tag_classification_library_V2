@@ -10,7 +10,7 @@
 
 会话管理：
     - 检查session中的认证状态
-    - 检查会话超时（默认30分钟）
+    - 检查会话超时（默认10分钟）
     - 更新最后活动时间
 
 使用示例：
@@ -30,11 +30,15 @@
     - Web页面: 未登录重定向到登录页
     - API接口: 返回401 JSON错误响应
 """
+import os
 import time
 from functools import wraps
 from flask import request, jsonify, redirect, url_for, session, g
 
-INACTIVITY_TIMEOUT = 1800
+
+def get_inactivity_timeout():
+    """获取不活动超时时间（秒）"""
+    return int(os.environ.get('INACTIVITY_TIMEOUT', '600'))
 
 
 def login_required(f):
@@ -73,9 +77,10 @@ def login_required(f):
             return redirect(url_for('auth.login'))
         
         last_activity = session.get('last_activity')
+        timeout = get_inactivity_timeout()
         if last_activity:
             elapsed = time.time() - last_activity
-            if elapsed > INACTIVITY_TIMEOUT:
+            if elapsed > timeout:
                 session.clear()
                 if request.path.startswith('/api/') or request.path.startswith('/video/'):
                     return jsonify({
@@ -127,9 +132,10 @@ def api_login_required(f):
             }), 401
         
         last_activity = session.get('last_activity')
+        timeout = get_inactivity_timeout()
         if last_activity:
             elapsed = time.time() - last_activity
-            if elapsed > INACTIVITY_TIMEOUT:
+            if elapsed > timeout:
                 session.clear()
                 return jsonify({
                     'success': False, 
@@ -178,9 +184,10 @@ def optional_auth(f):
     def decorated_function(*args, **kwargs):
         if session.get('authenticated', False):
             last_activity = session.get('last_activity')
+            timeout = get_inactivity_timeout()
             if last_activity:
                 elapsed = time.time() - last_activity
-                if elapsed > INACTIVITY_TIMEOUT:
+                if elapsed > timeout:
                     session.clear()
                 else:
                     session['last_activity'] = time.time()

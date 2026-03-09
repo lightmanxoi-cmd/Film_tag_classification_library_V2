@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTagTree();
     loadVideos();
     loadStats();
+    initSessionTimeout();
     
     // 绑定桌面端搜索框回车事件
     document.getElementById('searchInput').addEventListener('keypress', function(e) {
@@ -1346,3 +1347,81 @@ window.addEventListener('resize', function() {
         navbar.style.transform = 'translateY(0)';
     }
 });
+
+/* ==================== 会话超时管理 ==================== */
+
+const SESSION_TIMEOUT = 10 * 60 * 1000;
+let lastActivityTime = Date.now();
+let sessionTimerInterval = null;
+let sessionWarningShown = false;
+
+function initSessionTimeout() {
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    activityEvents.forEach(event => {
+        document.addEventListener(event, handleUserActivity, { passive: true });
+    });
+    
+    sessionTimerInterval = setInterval(checkSessionTimeout, 1000);
+    
+    updateSessionTimer();
+}
+
+function handleUserActivity() {
+    lastActivityTime = Date.now();
+    sessionWarningShown = false;
+}
+
+function checkSessionTimeout() {
+    const elapsed = Date.now() - lastActivityTime;
+    const remaining = SESSION_TIMEOUT - elapsed;
+    
+    updateSessionTimer();
+    
+    if (remaining <= 60000 && remaining > 30000 && !sessionWarningShown) {
+        showSessionWarning(Math.ceil(remaining / 1000));
+        sessionWarningShown = true;
+    }
+    
+    if (remaining <= 0) {
+        clearInterval(sessionTimerInterval);
+        logout(true);
+    }
+}
+
+function updateSessionTimer() {
+    const timerEl = document.getElementById('sessionTimer');
+    if (!timerEl) return;
+    
+    const elapsed = Date.now() - lastActivityTime;
+    const remaining = Math.max(0, SESSION_TIMEOUT - elapsed);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    
+    timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    timerEl.classList.remove('warning', 'danger');
+    if (remaining <= 60000) {
+        timerEl.classList.add('danger');
+    } else if (remaining <= 180000) {
+        timerEl.classList.add('warning');
+    }
+}
+
+function showSessionWarning(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    showToast(`会话将在 ${minutes}分${secs}秒 后过期，请继续操作以保持登录`, 'warning');
+}
+
+function logout(timeout = false) {
+    if (sessionTimerInterval) {
+        clearInterval(sessionTimerInterval);
+    }
+    
+    if (timeout) {
+        alert('由于长时间未操作，您已自动退出登录');
+    }
+    
+    window.location.href = '/logout';
+}

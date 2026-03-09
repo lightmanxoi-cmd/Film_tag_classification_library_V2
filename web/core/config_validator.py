@@ -23,6 +23,10 @@ import sys
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
+from video_tag_system.utils.logger import get_logger, console
+
+logger = get_logger(__name__)
+
 
 class ConfigurationError(Exception):
     """配置错误异常"""
@@ -213,9 +217,9 @@ def check_environment() -> Tuple[bool, List[str], List[str]]:
 
 def print_config_status():
     """打印配置状态"""
-    print("=" * 60)
-    print("配置状态检查")
-    print("=" * 60)
+    console.separator()
+    console.info("配置状态检查")
+    console.separator()
     
     is_valid, errors, warnings = check_environment()
     
@@ -223,27 +227,36 @@ def print_config_status():
     database_url = os.environ.get('DATABASE_URL', 'sqlite:///./video_library.db (默认)')
     secret_key = os.environ.get('SECRET_KEY', '(自动生成)')
     
-    print(f"  VIDEO_BASE_PATH: {video_path}")
-    print(f"  DATABASE_URL: {database_url}")
-    print(f"  SECRET_KEY: {'(已设置)' if os.environ.get('SECRET_KEY') else '(自动生成)'}")
-    print(f"  DEFAULT_PASSWORD: {'(已设置)' if os.environ.get('DEFAULT_PASSWORD') else '(未设置)'}")
+    console.info(f"  VIDEO_BASE_PATH: {video_path}")
+    console.info(f"  DATABASE_URL: {database_url}")
+    console.info(f"  SECRET_KEY: {'(已设置)' if os.environ.get('SECRET_KEY') else '(自动生成)'}")
+    console.info(f"  DEFAULT_PASSWORD: {'(已设置)' if os.environ.get('DEFAULT_PASSWORD') else '(未设置)'}")
     
-    print("-" * 60)
+    console.separator('-')
     
     if warnings:
-        print("警告:")
+        console.warning("警告:")
         for w in warnings:
-            print(f"  ⚠ {w}")
+            console.warning(f"  ⚠ {w}")
     
     if errors:
-        print("错误:")
+        console.error("错误:")
         for e in errors:
-            print(f"  ❌ {e}")
+            console.error(f"  ❌ {e}")
     
     if not warnings and not errors:
-        print("✓ 配置检查通过")
+        console.success("✓ 配置检查通过")
     
-    print("=" * 60)
+    console.separator()
+    
+    logger.info(
+        "配置状态检查完成",
+        extra={'extra_data': {
+            'is_valid': is_valid,
+            'errors_count': len(errors),
+            'warnings_count': len(warnings)
+        }}
+    )
     
     return is_valid
 
@@ -261,19 +274,21 @@ def require_config(config: dict):
     result = validate_config(config)
     
     if not result.is_valid:
-        print("\n" + "=" * 60)
-        print("配置验证失败!")
-        print("=" * 60)
+        console.separator()
+        console.error("配置验证失败!")
+        console.separator()
         for e in result.errors:
-            print(f"  ❌ {e}")
-        print("\n请检查以下配置:")
-        print("  1. 设置 VIDEO_BASE_PATH 环境变量或创建 .env 文件")
-        print("  2. 确保 SECRET_KEY 已设置")
-        print("  3. 检查数据库配置")
-        print("=" * 60)
+            console.error(f"  ❌ {e}")
+        console.info("\n请检查以下配置:")
+        console.info("  1. 设置 VIDEO_BASE_PATH 环境变量或创建 .env 文件")
+        console.info("  2. 确保 SECRET_KEY 已设置")
+        console.info("  3. 检查数据库配置")
+        console.separator()
+        logger.error("配置验证失败", extra={'extra_data': {'errors': result.errors}})
         raise ConfigurationError(result.errors)
     
     if result.warnings:
-        print("\n配置警告:")
+        console.info("\n配置警告:")
         for w in result.warnings:
-            print(f"  ⚠ {w}")
+            console.warning(f"  ⚠ {w}")
+        logger.warning("配置存在警告", extra={'extra_data': {'warnings': result.warnings}})

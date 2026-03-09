@@ -41,6 +41,14 @@
         <div class="nav-stats" id="stats">
             <span id="videoCount">0</span> 部视频
         </div>
+        <div class="nav-user">
+            <span id="sessionTimer" class="session-timer" title="会话剩余时间"></span>
+            <button class="logout-btn" onclick="logout()" title="退出登录">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                </svg>
+            </button>
+        </div>
         <button class="mobile-search-btn" id="mobileSearchBtn" onclick="toggleMobileSearch()">
             <span>🔍</span>
         </button>

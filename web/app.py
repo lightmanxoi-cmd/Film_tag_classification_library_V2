@@ -36,14 +36,14 @@ Attributes:
 import os
 import time
 import atexit
-import logging
 from flask import Flask, g
 
 from video_tag_system.core.database import DatabaseManager
 from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
 from video_tag_system.utils.cache import query_cache
+from video_tag_system.utils.logger import get_logger, setup_logging, set_request_id, clear_request_id
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 from web.core.config import config
 from web.core.extensions import cors
@@ -318,6 +318,7 @@ def _register_request_hooks(app: Flask):
         
         初始化请求上下文变量，定期清理过期缓存。
         """
+        set_request_id()
         g.db_session = None
         g.video_service = None
         g.tag_service = None
@@ -329,7 +330,7 @@ def _register_request_hooks(app: Flask):
             _last_cache_cleanup = time.time()
             cleaned = query_cache.cleanup_expired()
             if cleaned > 0:
-                print(f"Cache cleanup: removed {cleaned} expired entries")
+                logger.debug(f"缓存清理: 移除了 {cleaned} 个过期条目")
     
     @app.teardown_request
     def teardown_request(exception=None):

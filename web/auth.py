@@ -68,6 +68,10 @@ from typing import Optional, Tuple
 from functools import wraps
 from flask import session, redirect, url_for, request
 
+from video_tag_system.utils.logger import get_logger, console
+
+logger = get_logger(__name__)
+
 try:
     from argon2 import PasswordHasher
     from argon2.exceptions import VerifyMismatchError, VerificationError
@@ -331,20 +335,22 @@ class AuthManager:
             default_password = os.environ.get('DEFAULT_PASSWORD')
             if default_password:
                 self.set_password(default_password)
-                print("=" * 60)
-                print("安全提示: 已从环境变量设置初始密码")
-                print("=" * 60)
-                print("请登录后立即修改密码！")
-                print("=" * 60)
+                console.separator()
+                console.info("安全提示: 已从环境变量设置初始密码")
+                console.separator()
+                console.warning("请登录后立即修改密码！")
+                console.separator()
+                logger.info("已从环境变量设置初始密码")
             else:
-                print("=" * 60)
-                print("警告: 未设置初始密码")
-                print("=" * 60)
-                print("请通过以下方式之一设置密码:")
-                print("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
-                print("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
-                print("  3. 首次访问时系统会引导您设置密码")
-                print("=" * 60)
+                console.separator()
+                console.warning("警告: 未设置初始密码")
+                console.separator()
+                console.info("请通过以下方式之一设置密码:")
+                console.info("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
+                console.info("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
+                console.info("  3. 首次访问时系统会引导您设置密码")
+                console.separator()
+                logger.warning("未设置初始密码，需要手动配置")
     
     def set_password(self, password: str) -> bool:
         """
@@ -359,9 +365,10 @@ class AuthManager:
         try:
             password_hash = self.hasher.hash_password(password)
             self.config.set_password_hash(password_hash)
+            logger.info("密码设置成功")
             return True
         except Exception as e:
-            print(f"设置密码失败: {e}")
+            logger.error(f"设置密码失败: {e}")
             return False
     
     def verify_password(self, password: str) -> bool:
@@ -375,7 +382,12 @@ class AuthManager:
             bool: 密码是否正确
         """
         stored_hash = self.config.get_password_hash()
-        return self.hasher.verify_password(password, stored_hash)
+        result = self.hasher.verify_password(password, stored_hash)
+        if result:
+            logger.debug("密码验证通过")
+        else:
+            logger.warning("密码验证失败")
+        return result
     
     def get_session_secret(self) -> str:
         """
@@ -401,12 +413,15 @@ class AuthManager:
         if self.verify_password(password):
             session['authenticated'] = True
             session.permanent = True
+            logger.info("用户登录成功")
             return True, "登录成功"
+        logger.warning("用户登录失败：密码错误")
         return False, "密码错误"
     
     def logout(self):
         """登出，清除会话"""
         session.clear()
+        logger.info("用户已登出")
     
     def is_authenticated(self) -> bool:
         """
@@ -478,6 +493,7 @@ def init_auth(app, config_dir: str = None):
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400
+    logger.info("认证模块初始化完成")
     return auth_manager
 
 

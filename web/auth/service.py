@@ -52,6 +52,10 @@ import hmac
 import secrets
 from typing import Tuple, Optional
 
+from video_tag_system.utils.logger import get_logger, console
+
+logger = get_logger(__name__)
+
 AUTH_CONFIG_FILE = '.auth_config.json'
 
 try:
@@ -68,8 +72,8 @@ try:
 except ImportError:
     ARGON2_AVAILABLE = False
     ph = None
-    print("警告: argon2-cffi 未安装，将使用 PBKDF2-SHA256 作为后备方案")
-    print("建议运行: pip install argon2-cffi")
+    logger.warning("argon2-cffi 未安装，将使用 PBKDF2-SHA256 作为后备方案")
+    logger.info("建议运行: pip install argon2-cffi")
 
 
 def get_auth_config_path(base_dir: str = None) -> str:
@@ -139,7 +143,7 @@ def save_auth_config(config: dict, base_dir: str = None):
             json.dump(config, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        print(f"保存认证配置失败: {e}")
+        logger.error(f"保存认证配置失败: {e}")
         return False
 
 
@@ -264,24 +268,26 @@ def init_default_password(base_dir: str = None, default_password: str = None) ->
             config['session_secret'] = secrets.token_hex(32)
             save_auth_config(config, base_dir)
             is_new = True
-            print("=" * 60)
-            print("安全提示: 已设置初始密码")
-            print("=" * 60)
-            print("请登录后立即修改密码！")
-            print("=" * 60)
+            console.separator()
+            console.info("安全提示: 已设置初始密码")
+            console.separator()
+            console.warning("请登录后立即修改密码！")
+            console.separator()
+            logger.info("已初始化默认密码")
         else:
-            print("=" * 60)
-            print("警告: 未设置初始密码")
-            print("=" * 60)
-            print("请通过以下方式之一设置密码:")
-            print("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
-            print("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
-            print("  3. 首次访问时系统会引导您设置密码")
-            print("=" * 60)
+            console.separator()
+            console.warning("警告: 未设置初始密码")
+            console.separator()
+            console.info("请通过以下方式之一设置密码:")
+            console.info("  1. 设置环境变量: DEFAULT_PASSWORD=your_password")
+            console.info("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
+            console.info("  3. 首次访问时系统会引导您设置密码")
+            console.separator()
             config['session_secret'] = secrets.token_hex(32)
             config['password_pending'] = True
             save_auth_config(config, base_dir)
             is_new = True
+            logger.warning("未设置初始密码，需要手动配置")
     
     return config, is_new
 
@@ -325,6 +331,8 @@ def change_password(old_password: str, new_password: str, base_dir: str = None) 
     new_hash = hash_password(new_password)
     config['password_hash'] = new_hash
     save_auth_config(config, base_dir)
+    
+    logger.info("密码修改成功")
     
     return True, '密码修改成功'
 
@@ -398,7 +406,12 @@ class AuthService:
                 print("验证通过")
         """
         stored_hash = self.config.get('password_hash', '')
-        return verify_password(password, stored_hash)
+        result = verify_password(password, stored_hash)
+        if result:
+            logger.debug("密码验证通过")
+        else:
+            logger.warning("密码验证失败")
+        return result
     
     def change_password(self, old_password: str, new_password: str) -> Tuple[bool, str]:
         """

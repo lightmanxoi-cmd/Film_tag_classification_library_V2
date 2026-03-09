@@ -117,6 +117,57 @@ body {
     font-weight: 600;
 }
 
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.session-timer {
+    color: #999;
+    font-size: 12px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.session-timer.warning {
+    color: #ff9800;
+    background: rgba(255,152,0,0.15);
+}
+
+.session-timer.danger {
+    color: #f44336;
+    background: rgba(244,67,54,0.15);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: rgba(229, 9, 14, 0.2);
+    border: 1px solid rgba(229, 9, 14, 0.5);
+    border-radius: 4px;
+    color: #e50914;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    background: #e50914;
+    color: #fff;
+}
+
 .mobile-search-btn {
     display: none;
     width: 44px;
@@ -1166,6 +1217,26 @@ body {
     
     .nav-stats {
         display: none;
+    }
+    
+    .nav-user {
+        gap: 8px;
+    }
+    
+    .session-timer {
+        font-size: 11px;
+        padding: 3px 6px;
+        min-width: 40px;
+    }
+    
+    .logout-btn {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .logout-btn svg {
+        width: 16px;
+        height: 16px;
     }
     
     .mobile-search-btn {

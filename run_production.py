@@ -20,6 +20,10 @@ import sys
 import argparse
 from pathlib import Path
 
+from video_tag_system.utils.logger import setup_logging, get_logger, console
+
+logger = get_logger(__name__)
+
 
 def load_env_file():
     """加载 .env 文件"""
@@ -34,6 +38,7 @@ def load_env_file():
                     value = value.strip()
                     if key and key not in os.environ:
                         os.environ[key] = value
+        logger.info("已加载 .env 配置文件")
 
 
 WAITRESS_CONFIG = {
@@ -52,9 +57,9 @@ WAITRESS_CONFIG = {
 
 def check_environment():
     """检查生产环境配置"""
-    print("=" * 60)
-    print("生产环境启动检查")
-    print("=" * 60)
+    console.separator()
+    console.info("生产环境启动检查")
+    console.separator()
     
     errors = []
     warnings = []
@@ -73,33 +78,33 @@ def check_environment():
     if missing_files:
         errors.append(f"缺少必要文件: {', '.join(missing_files)}")
     else:
-        print("✓ 所有必要文件已找到")
+        console.success("✓ 所有必要文件已找到")
     
     db_path = 'video_library.db'
     if os.path.exists(db_path):
         db_size = os.path.getsize(db_path) / (1024 * 1024)
-        print(f"✓ 数据库文件: {db_path} ({db_size:.2f} MB)")
+        console.success(f"✓ 数据库文件: {db_path} ({db_size:.2f} MB)")
     else:
         warnings.append(f"数据库文件不存在: {db_path}（首次运行将创建）")
     
     video_path = os.environ.get('VIDEO_BASE_PATH')
     if video_path:
         if os.path.exists(video_path):
-            print(f"✓ 视频目录: {video_path}")
+            console.success(f"✓ 视频目录: {video_path}")
         else:
             errors.append(f"视频目录不存在: {video_path}")
     else:
         errors.append("VIDEO_BASE_PATH 环境变量未设置")
-        print("  请通过以下方式设置:")
-        print("    1. 创建 .env 文件并添加: VIDEO_BASE_PATH=/path/to/videos")
-        print("    2. 或设置环境变量: set VIDEO_BASE_PATH=/path/to/videos")
+        console.info("  请通过以下方式设置:")
+        console.info("    1. 创建 .env 文件并添加: VIDEO_BASE_PATH=/path/to/videos")
+        console.info("    2. 或设置环境变量: set VIDEO_BASE_PATH=/path/to/videos")
     
     secret_key = os.environ.get('SECRET_KEY')
     if secret_key:
         if len(secret_key) < 16:
             warnings.append("SECRET_KEY 长度过短，建议至少16个字符")
         else:
-            print("✓ SECRET_KEY 已设置")
+            console.success("✓ SECRET_KEY 已设置")
     else:
         warnings.append("SECRET_KEY 未设置，将自动生成（生产环境建议手动设置）")
     
@@ -107,26 +112,26 @@ def check_environment():
     if default_password:
         warnings.append("DEFAULT_PASSWORD 已设置，请确保首次登录后修改密码")
     
-    print("-" * 60)
+    console.separator('-')
     
     if warnings:
-        print("警告:")
+        console.warning("警告:")
         for w in warnings:
-            print(f"  ⚠ {w}")
+            console.warning(f"  ⚠ {w}")
     
     if errors:
-        print("错误:")
+        console.error("错误:")
         for e in errors:
-            print(f"  ❌ {e}")
-        print("-" * 60)
-        print("请修复以上错误后重试")
-        print("=" * 60)
+            console.error(f"  ❌ {e}")
+        console.separator('-')
+        console.error("请修复以上错误后重试")
+        console.separator()
         return False
     
     if not warnings:
-        print("✓ 配置检查通过")
+        console.success("✓ 配置检查通过")
     
-    print("=" * 60)
+    console.separator()
     return True
 
 
@@ -148,13 +153,24 @@ def run_production_server(host='0.0.0.0', port=5000, threads=None):
         
         actual_threads = threads if threads is not None else WAITRESS_CONFIG['threads']
         
-        print(f"\n🚀 启动生产服务器...")
-        print(f"   监听地址: {host}:{port}")
-        print(f"   工作线程: {actual_threads}")
-        print(f"   连接限制: {WAITRESS_CONFIG['connection_limit']}")
-        print(f"   发送缓冲: {WAITRESS_CONFIG['send_bytes']} bytes")
-        print(f"   访问地址: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
-        print(f"   按 Ctrl+C 停止服务器\n")
+        console.info("")
+        console.info("🚀 启动生产服务器...")
+        console.info(f"   监听地址: {host}:{port}")
+        console.info(f"   工作线程: {actual_threads}")
+        console.info(f"   连接限制: {WAITRESS_CONFIG['connection_limit']}")
+        console.info(f"   发送缓冲: {WAITRESS_CONFIG['send_bytes']} bytes")
+        console.info(f"   访问地址: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+        console.info("   按 Ctrl+C 停止服务器\n")
+        
+        logger.info(
+            "启动生产服务器",
+            extra={'extra_data': {
+                'host': host,
+                'port': port,
+                'threads': actual_threads,
+                'connection_limit': WAITRESS_CONFIG['connection_limit']
+            }}
+        )
         
         config = WAITRESS_CONFIG.copy()
         if threads is not None:
@@ -177,16 +193,23 @@ def run_production_server(host='0.0.0.0', port=5000, threads=None):
         )
         
     except ImportError as e:
-        print(f"❌ 导入错误: {e}")
-        print("请确保已安装 waitress: pip install waitress")
+        console.error(f"❌ 导入错误: {e}")
+        console.error("请确保已安装 waitress: pip install waitress")
+        logger.error("导入 waitress 失败", exc_info=True)
         sys.exit(1)
     except Exception as e:
-        print(f"❌ 启动失败: {e}")
+        console.error(f"❌ 启动失败: {e}")
+        logger.error("启动生产服务器失败", exc_info=True)
         sys.exit(1)
 
 
 def main():
     """主函数"""
+    setup_logging(
+        level=os.environ.get('LOG_LEVEL', 'INFO'),
+        log_dir=os.environ.get('LOG_DIR', 'logs')
+    )
+    
     parser = argparse.ArgumentParser(
         description='视频标签管理系统 - 生产环境启动脚本',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -243,7 +266,7 @@ def main():
         sys.exit(1)
     
     if args.check_only:
-        print("环境检查完成，退出。")
+        console.info("环境检查完成，退出。")
         sys.exit(0)
     
     run_production_server(args.host, args.port, args.threads)
