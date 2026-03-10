@@ -157,6 +157,12 @@ class Config:
     
     DEFAULT_PASSWORD = _get_default_password()
     
+    VIDEO_STREAM_CHUNK_SIZE = int(os.environ.get('VIDEO_STREAM_CHUNK_SIZE', 1024 * 1024))
+    VIDEO_CACHE_MAX_AGE = int(os.environ.get('VIDEO_CACHE_MAX_AGE', 3600))
+    VIDEO_STREAM_BUFFER_SIZE = int(os.environ.get('VIDEO_STREAM_BUFFER_SIZE', 64 * 1024))
+    VIDEO_STREAM_LOG_ENABLED = os.environ.get('VIDEO_STREAM_LOG_ENABLED', 'true').lower() == 'true'
+    VIDEO_STREAM_MAX_BANDWIDTH = int(os.environ.get('VIDEO_STREAM_MAX_BANDWIDTH', 0))
+    
     @classmethod
     def init_app(cls, app):
         """

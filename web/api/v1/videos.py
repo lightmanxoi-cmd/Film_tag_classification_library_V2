@@ -352,13 +352,107 @@ def get_videos_by_tags_advanced():
     return APIResponse.success(data=response_data, cached=False)
 
 
-VIDEO_STREAM_CHUNK_SIZE = 1024 * 1024
-VIDEO_CACHE_MAX_AGE = 3600
+from flask import current_app
+import hashlib
+import time
+from functools import wraps
+import threading
+
+MIME_TYPES = {
+    '.mp4': 'video/mp4',
+    '.mkv': 'video/x-matroska',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.wmv': 'video/x-ms-wmv',
+    '.flv': 'video/x-flv',
+    '.m4v': 'video/mp4'
+}
+
+_active_streams = {}
+_streams_lock = threading.Lock()
+
+
+def _register_stream(video_id: int, client_ip: str) -> str:
+    """注册视频流连接"""
+    stream_id = f"{client_ip}:{video_id}:{time.time()}"
+    with _streams_lock:
+        if video_id not in _active_streams:
+            _active_streams[video_id] = {}
+        _active_streams[video_id][stream_id] = {
+            'start_time': time.time(),
+            'client_ip': client_ip,
+            'bytes_sent': 0
+        }
+    return stream_id
+
+
+def _unregister_stream(video_id: int, stream_id: str):
+    """注销视频流连接"""
+    with _streams_lock:
+        if video_id in _active_streams and stream_id in _active_streams[video_id]:
+            del _active_streams[video_id][stream_id]
+            if not _active_streams[video_id]:
+                del _active_streams[video_id]
+
+
+def _update_stream_bytes(video_id: int, stream_id: str, bytes_sent: int):
+    """更新流传输字节数"""
+    with _streams_lock:
+        if video_id in _active_streams and stream_id in _active_streams[video_id]:
+            _active_streams[video_id][stream_id]['bytes_sent'] += bytes_sent
+
+
+def get_active_streams_count(video_id: int = None) -> int:
+    """获取活动流数量"""
+    with _streams_lock:
+        if video_id:
+            return len(_active_streams.get(video_id, {}))
+        return sum(len(streams) for streams in _active_streams.values())
+
+
+def _get_stream_config():
+    """获取视频流配置"""
+    return {
+        'chunk_size': current_app.config.get('VIDEO_STREAM_CHUNK_SIZE', 1024 * 1024),
+        'cache_max_age': current_app.config.get('VIDEO_CACHE_MAX_AGE', 3600),
+        'buffer_size': current_app.config.get('VIDEO_STREAM_BUFFER_SIZE', 64 * 1024),
+        'log_enabled': current_app.config.get('VIDEO_STREAM_LOG_ENABLED', True),
+        'max_bandwidth': current_app.config.get('VIDEO_STREAM_MAX_BANDWIDTH', 0)
+    }
+
+
+def _log_stream_request(video_id: int, file_path: str, range_header: str, 
+                         status_code: int, bytes_sent: int, duration: float):
+    """记录视频流请求日志"""
+    config = _get_stream_config()
+    if not config['log_enabled']:
+        return
+    
+    from video_tag_system.utils.logger import get_logger
+    logger = get_logger('video_stream')
+    
+    logger.info(
+        f"视频流请求 | ID: {video_id} | 文件: {os.path.basename(file_path)} | "
+        f"Range: {range_header or 'full'} | 状态: {status_code} | "
+        f"字节: {bytes_sent} | 耗时: {duration:.3f}s"
+    )
+
+
+def _generate_file_etag(file_path: str, file_size: int, mtime: float) -> str:
+    """生成文件ETag"""
+    etag_base = f"{file_path}-{file_size}-{mtime}"
+    return hashlib.md5(etag_base.encode()).hexdigest()
 
 
 def _parse_range_header(range_header: str, file_size: int) -> tuple:
     """
     解析HTTP Range请求头
+    
+    支持多种Range格式:
+    - bytes=0-499 (前500字节)
+    - bytes=500- (从500字节到末尾)
+    - bytes=-500 (最后500字节)
     
     Args:
         range_header: Range请求头值
@@ -367,47 +461,90 @@ def _parse_range_header(range_header: str, file_size: int) -> tuple:
     Returns:
         tuple: (start, end) 字节范围，无效时返回 (None, None)
     """
-    start = 0
-    end = file_size - 1
-    
-    match = re.search(r'bytes=(\d+)-(\d*)', range_header)
-    if match:
-        start = int(match.group(1))
-        if match.group(2):
-            end = int(match.group(2))
+    try:
+        range_match = re.match(r'bytes=(\d*)-(\d*)', range_header.strip())
+        if not range_match:
+            return None, None
+        
+        start_str, end_str = range_match.groups()
+        
+        if start_str and end_str:
+            start = int(start_str)
+            end = int(end_str)
+        elif start_str:
+            start = int(start_str)
+            end = file_size - 1
+        elif end_str:
+            end = int(end_str)
+            start = max(0, file_size - end)
+            end = file_size - 1
+        else:
+            return None, None
+        
+        if start < 0 or end < start or start >= file_size:
+            return None, None
+        
         end = min(end, file_size - 1)
-    
-    if start > end or start >= file_size:
+        return start, end
+        
+    except (ValueError, AttributeError):
         return None, None
-    
-    return start, end
 
 
-def _generate_chunks(file_path: str, start: int, length: int, chunk_size: int):
+def _generate_chunks(file_path: str, start: int, length: int, chunk_size: int, 
+                     buffer_size: int = 65536, bandwidth_limit: int = 0,
+                     video_id: int = None, stream_id: str = None):
     """
     生成文件块生成器
     
-    用于流式传输大文件，避免一次性加载到内存。
+    使用缓冲读取优化IO性能，支持大文件流式传输。
+    支持带宽限制防止服务器过载。
     
     Args:
         file_path: 文件路径
         start: 起始字节位置
         length: 读取长度
         chunk_size: 每次读取的块大小
+        buffer_size: 文件缓冲区大小
+        bandwidth_limit: 带宽限制 (bytes/s)，0表示无限制
+        video_id: 视频ID（用于连接管理）
+        stream_id: 流ID（用于连接管理）
     
     Yields:
         bytes: 文件数据块
     """
-    with open(file_path, 'rb') as f:
-        f.seek(start)
-        remaining = length
-        while remaining > 0:
-            read_size = min(chunk_size, remaining)
-            chunk = f.read(read_size)
-            if not chunk:
-                break
-            remaining -= len(chunk)
-            yield chunk
+    try:
+        with open(file_path, 'rb', buffering=buffer_size) as f:
+            f.seek(start)
+            remaining = length
+            last_chunk_time = time.time()
+            
+            while remaining > 0:
+                read_size = min(chunk_size, remaining)
+                chunk = f.read(read_size)
+                
+                if not chunk:
+                    break
+                
+                remaining -= len(chunk)
+                
+                if bandwidth_limit > 0:
+                    chunk_size_bytes = len(chunk)
+                    expected_time = chunk_size_bytes / bandwidth_limit
+                    elapsed = time.time() - last_chunk_time
+                    
+                    if elapsed < expected_time:
+                        time.sleep(expected_time - elapsed)
+                    
+                    last_chunk_time = time.time()
+                
+                if video_id and stream_id:
+                    _update_stream_bytes(video_id, stream_id, len(chunk))
+                
+                yield chunk
+    finally:
+        if video_id and stream_id:
+            _unregister_stream(video_id, stream_id)
 
 
 @videos_bp.route('/stream/<int:video_id>')
@@ -428,58 +565,99 @@ def serve_video_by_id(video_id):
     
     Features:
         - 支持Range请求（206 Partial Content）
-        - 1MB块大小流式传输
-        - 1小时浏览器缓存
+        - ETag支持（避免重复传输）
+        - 条件请求（If-None-Match, If-Range）
+        - 流式传输（避免内存溢出）
+        - 浏览器缓存优化
         - 自动识别视频MIME类型
+        - 请求日志记录
     """
+    start_time = time.time()
+    config = _get_stream_config()
+    
     video_svc, _, _, _ = get_services()
     video = video_svc.get_video(video_id)
     full_path = video.file_path
     
     if not os.path.exists(full_path):
+        _log_stream_request(video_id, full_path, None, 404, 0, time.time() - start_time)
         return APIResponse.not_found(f"视频不存在: {full_path}")
     
     file_size = os.path.getsize(full_path)
+    file_mtime = os.path.getmtime(full_path)
     file_ext = os.path.splitext(full_path)[1].lower()
+    mimetype = MIME_TYPES.get(file_ext, 'video/mp4')
     
-    mime_types = {
-        '.mp4': 'video/mp4',
-        '.mkv': 'video/x-matroska',
-        '.webm': 'video/webm',
-        '.avi': 'video/x-msvideo',
-        '.mov': 'video/quicktime'
-    }
-    mimetype = mime_types.get(file_ext, 'video/mp4')
+    etag = _generate_file_etag(full_path, file_size, file_mtime)
     
-    range_header = request.headers.get('Range', None)
+    if_none_match = request.headers.get('If-None-Match')
+    if if_none_match and if_none_match == etag:
+        return Response(status=304)
     
-    if range_header:
+    range_header = request.headers.get('Range')
+    if_range = request.headers.get('If-Range')
+    
+    use_range = range_header is not None
+    if if_range and if_range != etag:
+        try:
+            if_range_time = time.mktime(time.strptime(if_range, '%a, %d %b %Y %H:%M:%S GMT'))
+            if file_mtime > if_range_time:
+                use_range = False
+        except (ValueError, TypeError):
+            pass
+    
+    if use_range and range_header:
         start, end = _parse_range_header(range_header, file_size)
         
         if start is None:
             response = Response(status=416)
-            response.headers.add('Content-Range', f'bytes */{file_size}')
+            response.headers['Content-Range'] = f'bytes */{file_size}'
+            _log_stream_request(video_id, full_path, range_header, 416, 0, time.time() - start_time)
             return response
         
         length = end - start + 1
+        client_ip = request.remote_addr or 'unknown'
+        stream_id = _register_stream(video_id, client_ip)
         
         response = Response(
-            _generate_chunks(full_path, start, length, VIDEO_STREAM_CHUNK_SIZE),
+            _generate_chunks(
+                full_path, start, length, 
+                config['chunk_size'], 
+                config['buffer_size'],
+                config['max_bandwidth'],
+                video_id, 
+                stream_id
+            ),
             206,
             mimetype=mimetype,
             direct_passthrough=True
         )
-        response.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
-        response.headers.add('Accept-Ranges', 'bytes')
-        response.headers.add('Content-Length', str(length))
-        response.headers.add('Cache-Control', f'public, max-age={VIDEO_CACHE_MAX_AGE}')
-        response.headers.add('X-Content-Type-Options', 'nosniff')
+        response.headers['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+        response.headers['Content-Length'] = str(length)
+        response.headers['Accept-Ranges'] = 'bytes'
+        response.headers['ETag'] = etag
+        response.headers['Cache-Control'] = f'public, max-age={config["cache_max_age"]}'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['Last-Modified'] = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime(file_mtime))
+        response.headers['X-Stream-Id'] = stream_id
+        
+        _log_stream_request(video_id, full_path, range_header, 206, length, time.time() - start_time)
         return response
     
-    response = send_file(full_path, mimetype=mimetype)
-    response.headers.add('Accept-Ranges', 'bytes')
-    response.headers.add('Cache-Control', f'public, max-age={VIDEO_CACHE_MAX_AGE}')
-    response.headers.add('X-Content-Type-Options', 'nosniff')
+    response = send_file(
+        full_path,
+        mimetype=mimetype,
+        conditional=True,
+        etag=False,
+        last_modified=file_mtime
+    )
+    response.headers['Accept-Ranges'] = 'bytes'
+    response.headers['ETag'] = etag
+    response.headers['Cache-Control'] = f'public, max-age={config["cache_max_age"]}'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Last-Modified'] = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime(file_mtime))
+    
+    _log_stream_request(video_id, full_path, None, 200, file_size, time.time() - start_time)
     return response
 
 
@@ -773,6 +951,53 @@ def get_missing_thumbnails():
         'total': len(missing_videos),
         'page': page,
         'page_size': page_size
+    })
+
+
+@videos_bp.route('/streams/active', methods=['GET'])
+@login_required
+@handle_exceptions
+def get_active_streams():
+    """
+    获取当前活动的视频流连接
+    
+    用于监控服务器负载和流媒体状态。
+    
+    Returns:
+        JSON响应，包含活动流列表和统计信息
+    
+    Example:
+        GET /api/v1/videos/streams/active
+        {
+            "success": true,
+            "data": {
+                "total_streams": 3,
+                "streams_by_video": {
+                    "1": [{"client_ip": "127.0.0.1", "start_time": 1234567890, "bytes_sent": 1048576}]
+                }
+            }
+        }
+    """
+    with _streams_lock:
+        streams_data = {}
+        total_bytes = 0
+        
+        for vid, streams in _active_streams.items():
+            streams_data[vid] = []
+            for stream_id, info in streams.items():
+                streams_data[vid].append({
+                    'stream_id': stream_id,
+                    'client_ip': info['client_ip'],
+                    'start_time': info['start_time'],
+                    'duration': time.time() - info['start_time'],
+                    'bytes_sent': info['bytes_sent']
+                })
+                total_bytes += info['bytes_sent']
+    
+    return APIResponse.success(data={
+        'total_streams': get_active_streams_count(),
+        'total_bytes_sent': total_bytes,
+        'streams_by_video': streams_data
     })
 
 
