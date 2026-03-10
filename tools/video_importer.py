@@ -71,7 +71,8 @@ class VideoImporterCLI:
         Args:
             db_url: 数据库连接字符串，默认为当前目录下的video_library.db
         """
-        self.db_manager = DatabaseManager(database_url=db_url, echo=False)
+        default_db_url = "sqlite:///./video_library.db"
+        self.db_manager = DatabaseManager(database_url=db_url or default_db_url, echo=False)
         self.db_manager.create_tables()
     
     def _strip_quotes(self, text: str) -> str:
