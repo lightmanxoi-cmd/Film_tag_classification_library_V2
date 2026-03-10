@@ -13,6 +13,7 @@ class SessionManager {
         this.warningShown = false;
         this.onTimeout = null;
         this.onWarning = null;
+        this.onTimerUpdate = null;
     }
 
     init(options = {}) {
@@ -55,27 +56,39 @@ class SessionManager {
     }
 
     _updateTimerDisplay() {
-        if (!this.onTimerUpdate) return;
-        
         const elapsed = Date.now() - this.lastActivityTime;
         const remaining = Math.max(0, SESSION_TIMEOUT - elapsed);
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
         
-        let status = 'normal';
-        if (remaining <= WARNING_THRESHOLD) {
-            status = 'danger';
-        } else if (remaining <= DANGER_THRESHOLD) {
-            status = 'warning';
+        const timerEl = document.getElementById('sessionTimer');
+        if (timerEl) {
+            timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            timerEl.classList.remove('warning', 'danger');
+            if (remaining <= WARNING_THRESHOLD) {
+                timerEl.classList.add('danger');
+            } else if (remaining <= DANGER_THRESHOLD) {
+                timerEl.classList.add('warning');
+            }
         }
         
-        this.onTimerUpdate({
-            minutes,
-            seconds,
-            remaining,
-            status,
-            formatted: `${minutes}:${seconds.toString().padStart(2, '0')}`
-        });
+        if (this.onTimerUpdate) {
+            let status = 'normal';
+            if (remaining <= WARNING_THRESHOLD) {
+                status = 'danger';
+            } else if (remaining <= DANGER_THRESHOLD) {
+                status = 'warning';
+            }
+            
+            this.onTimerUpdate({
+                minutes,
+                seconds,
+                remaining,
+                status,
+                formatted: `${minutes}:${seconds.toString().padStart(2, '0')}`
+            });
+        }
     }
 
     _defaultTimeout() {

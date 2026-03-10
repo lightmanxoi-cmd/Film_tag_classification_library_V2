@@ -1,0 +1,193 @@
+/**
+ * 设计令牌 - CSS 变量定义
+ * 
+ * 统一管理颜色、间距、字体、动画等设计系统变量
+ * 所有 CSS 文件应使用这些变量而非硬编码值
+ */
+
+:root {
+    /* ==================== 颜色系统 ==================== */
+    
+    /* 品牌色 */
+    --color-primary: #e50914;
+    --color-primary-hover: #f40612;
+    --color-primary-light: rgba(229, 9, 20, 0.2);
+    --color-primary-dark: #b8070f;
+    
+    /* 背景色 */
+    --color-bg-primary: #141414;
+    --color-bg-secondary: #0a0a0a;
+    --color-bg-tertiary: #1a1a1a;
+    --color-bg-elevated: #222;
+    --color-bg-hover: #252525;
+    
+    /* 文字颜色 */
+    --color-text-primary: #fff;
+    --color-text-secondary: #999;
+    --color-text-tertiary: #666;
+    --color-text-muted: #555;
+    
+    /* 边框颜色 */
+    --color-border-primary: #333;
+    --color-border-secondary: #222;
+    --color-border-focus: var(--color-primary);
+    
+    /* 状态颜色 */
+    --color-success: #2e7d32;
+    --color-warning: #ff9800;
+    --color-error: #f44336;
+    --color-info: #2196f3;
+    
+    /* 透明度变体 */
+    --color-overlay-light: rgba(255, 255, 255, 0.1);
+    --color-overlay-dark: rgba(0, 0, 0, 0.7);
+    --color-overlay-darker: rgba(0, 0, 0, 0.85);
+    --color-overlay-gradient: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+    
+    /* ==================== 间距系统 ==================== */
+    
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+    --spacing-3xl: 32px;
+    --spacing-4xl: 40px;
+    
+    /* ==================== 布局尺寸 ==================== */
+    
+    --navbar-height: 64px;
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 0;
+    
+    /* 内容区域 */
+    --content-max-width: 1400px;
+    --content-padding: var(--spacing-2xl);
+    
+    /* 卡片 */
+    --card-min-width: 300px;
+    --card-gap: 18px;
+    --card-border-radius: var(--radius-md);
+    
+    /* ==================== 字体系统 ==================== */
+    
+    --font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-family-mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+    
+    /* 字体大小 */
+    --font-size-xs: 10px;
+    --font-size-sm: 11px;
+    --font-size-md: 12px;
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 20px;
+    --font-size-2xl: 24px;
+    --font-size-3xl: 32px;
+    
+    /* 字体粗细 */
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    
+    /* 行高 */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.75;
+    
+    /* ==================== 圆角 ==================== */
+    
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 6px;
+    --radius-xl: 8px;
+    --radius-2xl: 12px;
+    --radius-full: 50%;
+    
+    /* ==================== 阴影 ==================== */
+    
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
+    
+    /* ==================== 过渡动画 ==================== */
+    
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+    
+    /* 缓动函数 */
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* ==================== Z-Index 层级 ==================== */
+    
+    --z-dropdown: 100;
+    --z-sticky: 200;
+    --z-fixed: 300;
+    --z-modal-backdrop: 998;
+    --z-modal: 1000;
+    --z-navbar: 1000;
+    --z-popover: 1100;
+    --z-tooltip: 1200;
+    --z-toast: 3000;
+    
+    /* ==================== 断点（用于参考，CSS 无法直接使用） ==================== */
+    
+    /* --breakpoint-sm: 576px; */
+    /* --breakpoint-md: 768px; */
+    /* --breakpoint-lg: 992px; */
+    /* --breakpoint-xl: 1200px; */
+    /* --breakpoint-xxl: 1400px; */
+}
+
+/* ==================== 暗色主题（默认） ==================== */
+
+[data-theme="dark"] {
+    --color-bg-primary: #141414;
+    --color-bg-secondary: #0a0a0a;
+    --color-text-primary: #fff;
+    --color-text-secondary: #999;
+}
+
+/* ==================== 亮色主题（可选） ==================== */
+
+[data-theme="light"] {
+    --color-bg-primary: #f5f5f5;
+    --color-bg-secondary: #fff;
+    --color-bg-tertiary: #e8e8e8;
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #666;
+    --color-border-primary: #ddd;
+    --color-overlay-dark: rgba(0, 0, 0, 0.5);
+}
+
+/* ==================== 工具类 ==================== */
+
+.text-primary { color: var(--color-text-primary); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-muted { color: var(--color-text-muted); }
+
+.bg-primary { background-color: var(--color-bg-primary); }
+.bg-secondary { background-color: var(--color-bg-secondary); }
+.bg-tertiary { background-color: var(--color-bg-tertiary); }
+
+.border-primary { border-color: var(--color-border-primary); }
+.border-secondary { border-color: var(--color-border-secondary); }
+
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+
+.transition-fast { transition: all var(--transition-fast); }
+.transition-normal { transition: all var(--transition-normal); }
+.transition-slow { transition: all var(--transition-slow); }

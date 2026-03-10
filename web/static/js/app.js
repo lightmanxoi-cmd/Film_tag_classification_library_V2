@@ -869,30 +869,39 @@ function getMimeType(ext) {
  * 在页面底部显示一个短暂的提示消息。
  * 
  * @param {string} message - 提示消息内容
+ * @param {string} type - 消息类型 (info/success/warning/error)
  */
-function showToast(message) {
+function showToast(message, type = 'info') {
     let toast = document.getElementById('toast');
     if (!toast) {
         toast = document.createElement('div');
         toast.id = 'toast';
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(229, 9, 20, 0.9);
-            color: #fff;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            z-index: 3000;
-            opacity: 0;
-            transition: opacity 0.3s;
-            max-width: 90%;
-            text-align: center;
-        `;
         document.body.appendChild(toast);
     }
+    
+    const bgColors = {
+        info: 'rgba(229, 9, 20, 0.9)',
+        success: 'rgba(46, 125, 50, 0.9)',
+        warning: 'rgba(255, 152, 0, 0.9)',
+        error: 'rgba(244, 67, 54, 0.9)'
+    };
+    
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${bgColors[type] || bgColors.info};
+        color: #fff;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 3000;
+        opacity: 0;
+        transition: opacity 0.3s;
+        max-width: 90%;
+        text-align: center;
+    `;
     
     toast.textContent = message;
     toast.style.opacity = '1';
