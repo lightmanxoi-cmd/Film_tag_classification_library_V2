@@ -451,3 +451,175 @@ html, body {
         bottom: 1.5rem;
     }
 }
+
+@media (max-width: 480px) {
+    .top-bar {
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .back-btn,
+    .browse-mode-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+
+    .video-count {
+        font-size: 0.75rem;
+    }
+
+    .controls-overlay {
+        padding: 1rem;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .control-buttons {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .control-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .play-btn svg {
+        width: 28px;
+        height: 28px;
+    }
+
+    .skip-btn span,
+    .clock-toggle-btn span,
+    .fit-mode-btn span {
+        font-size: 0.6rem;
+    }
+
+    .volume-control {
+        margin-left: 0;
+        order: 1;
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+
+    .volume-slider {
+        width: 100px;
+    }
+
+    .clock-time {
+        font-size: 3.5rem;
+    }
+
+    .clock-overlay {
+        right: 1rem;
+        bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .video-name {
+        font-size: 0.85rem;
+    }
+
+    .progress-bar {
+        height: 3px;
+    }
+
+    .progress-bar:hover {
+        height: 4px;
+    }
+
+    .time-display {
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .clock-time {
+        font-size: 2.5rem;
+    }
+
+    .control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .play-btn svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .top-bar {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .back-btn,
+    .browse-mode-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .control-btn:active {
+        transform: scale(0.95);
+    }
+
+    .progress-bar::-webkit-slider-thumb {
+        opacity: 1;
+        width: 20px;
+        height: 20px;
+    }
+
+    .progress-bar::-moz-range-thumb {
+        opacity: 1;
+        width: 20px;
+        height: 20px;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+        width: 16px;
+        height: 16px;
+    }
+
+    .volume-slider::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+    .top-bar {
+        padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));
+    }
+
+    @media (max-width: 768px) {
+        .top-bar {
+            padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+        }
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .clock-overlay {
+        bottom: 1rem;
+        right: 1rem;
+    }
+
+    .clock-time {
+        font-size: 2.5rem;
+    }
+
+    .controls-overlay {
+        padding: 0.75rem 1rem;
+    }
+
+    .control-buttons {
+        gap: 0.5rem;
+    }
+
+    .control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+}

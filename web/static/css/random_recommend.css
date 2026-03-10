@@ -416,3 +416,169 @@ html, body {
         padding: 10px 0;
     }
 }
+
+@media (max-width: 480px) {
+    .top-bar {
+        padding: 0.75rem 1rem;
+        padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    }
+
+    .back-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+
+    .video-count {
+        font-size: 0.75rem;
+    }
+
+    .controls-overlay {
+        padding: 1rem;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .control-buttons {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .control-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .play-btn svg {
+        width: 28px;
+        height: 28px;
+    }
+
+    .rewind-btn,
+    .forward-btn {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .rewind-btn span,
+    .forward-btn span {
+        font-size: 0.6rem;
+    }
+
+    .skip-btn span,
+    .fit-mode-btn span {
+        font-size: 0.6rem;
+    }
+
+    .volume-control {
+        margin-left: 0;
+        order: 1;
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+
+    .volume-slider {
+        width: 100px;
+    }
+
+    .video-name {
+        font-size: 0.85rem;
+    }
+
+    .progress-bar {
+        height: 6px;
+    }
+
+    .time-display {
+        font-size: 0.7rem;
+    }
+
+    .skip-indicator {
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .play-btn svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .top-bar {
+        padding: 0.5rem 0.75rem;
+        padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+    }
+
+    .back-btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.7rem;
+    }
+
+    .control-buttons {
+        gap: 0.25rem;
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .control-btn:active {
+        transform: scale(0.95);
+    }
+
+    .progress-bar::-webkit-slider-thumb {
+        opacity: 1;
+        width: 24px;
+        height: 24px;
+    }
+
+    .progress-bar::-moz-range-thumb {
+        opacity: 1;
+        width: 24px;
+        height: 24px;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+        width: 18px;
+        height: 18px;
+    }
+
+    .volume-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+    }
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+    .top-bar {
+        padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));
+    }
+
+    @media (max-width: 768px) {
+        .top-bar {
+            padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+        }
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .controls-overlay {
+        padding: 0.75rem 1rem;
+    }
+
+    .control-buttons {
+        gap: 0.5rem;
+    }
+
+    .control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .skip-indicator {
+        font-size: 1.5rem;
+    }
+}

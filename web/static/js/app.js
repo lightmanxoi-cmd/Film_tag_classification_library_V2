@@ -101,6 +101,11 @@ function setIsRandomOrder(value) {
     appState.set('isRandomOrder', value);
 }
 
+function getPageSize() {
+    const isMobile = window.innerWidth <= 1023;
+    return isMobile ? 20 : 50;
+}
+
 function getSelectedFilterTags() {
     return appState.get('selectedFilterTags');
 }
@@ -371,7 +376,7 @@ function mobileSearchVideos() {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">搜索中...</div>';
     
-    fetchWithAuth(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`)
+    fetchWithAuth(`/api/videos?page=1&page_size=${getPageSize()}&search=${encodeURIComponent(keyword)}`)
         .then(response => response.json())
         .then(result => {
             if (result.success) {
@@ -499,14 +504,14 @@ async function loadVideos(page = 1) {
                 body: JSON.stringify({
                     tag_ids: getCurrentTagIds(),
                     page: page,
-                    page_size: 50,
+                    page_size: getPageSize(),
                     match_all: false
                 })
             });
             result = await response.json();
         } else {
             // 随机加载视频
-            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50&random=true&seed=${getRandomSeed()}`);
+            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=${getPageSize()}&random=true&seed=${getRandomSeed()}`);
             result = await response.json();
         }
         
@@ -541,6 +546,8 @@ function renderVideos(videos) {
         return;
     }
     
+    const isMobile = window.innerWidth <= 1023;
+    
     container.innerHTML = '';
     
     videos.forEach(video => {
@@ -556,27 +563,50 @@ function renderVideos(videos) {
             `<span class="video-tag">${t.name}</span>`
         ).join('');
         
-        const thumbnailClass = video.thumbnail ? 'thumbnail lazy-loading' : 'thumbnail';
-        const thumbnailDataAttr = video.thumbnail ? 
-            `data-bg-image="url('${video.thumbnail}')"` : '';
-        const thumbnailStyle = video.thumbnail ? '' : '';
+        let thumbnailHtml = '';
+        let gifHtml = '';
         
-        const gifElement = video.gif ? 
-            `<img class="gif-preview lazy-loading" data-src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
+        if (isMobile && video.gif) {
+            gifHtml = `
+                <img class="gif-preview-mobile lazy-loading" 
+                     data-src="${video.gif}" 
+                     alt="${video.title}"
+                     loading="lazy">
+            `;
+            thumbnailHtml = `
+                <div class="thumbnail gif-mode ${formatClass}">
+                    ${gifHtml}
+                    <span class="play-overlay">▶</span>
+                    <span class="format-badge">${ext.toUpperCase()}</span>
+                </div>
+            `;
+        } else {
+            const thumbnailClass = video.thumbnail ? 'thumbnail lazy-loading' : 'thumbnail';
+            const thumbnailDataAttr = video.thumbnail ? 
+                `data-bg-image="url('${video.thumbnail}')"` : '';
+            const thumbnailStyle = video.thumbnail ? '' : '';
+            
+            const gifElement = video.gif ? 
+                `<img class="gif-preview lazy-loading" data-src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
+            
+            thumbnailHtml = `
+                <div class="${thumbnailClass} ${formatClass}" ${thumbnailDataAttr} ${thumbnailStyle}>
+                    ${!video.thumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
+                    <span class="format-badge">${ext.toUpperCase()}</span>
+                    ${gifElement}
+                </div>
+            `;
+        }
         
         card.innerHTML = `
-            <div class="${thumbnailClass} ${formatClass}" ${thumbnailDataAttr} ${thumbnailStyle}>
-                ${!video.thumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
-                <span class="format-badge">${ext.toUpperCase()}</span>
-                ${gifElement}
-            </div>
+            ${thumbnailHtml}
             <div class="video-overlay">
                 <div class="video-title">${video.title}</div>
                 <div class="video-tags">${tagsHtml}</div>
             </div>
         `;
         
-        if (video.gif) {
+        if (!isMobile && video.gif) {
             const thumbnailDiv = card.querySelector('.thumbnail');
             const gifImg = card.querySelector('.gif-preview');
             
@@ -603,7 +633,7 @@ function renderVideos(videos) {
         container.appendChild(card);
     });
     
-    setupLazyLoading('.thumbnail[data-bg-image], .gif-preview[data-src]', {
+    setupLazyLoading('.thumbnail[data-bg-image], .gif-preview[data-src], .gif-preview-mobile[data-src]', {
         rootMargin: '200px'
     });
 }
@@ -754,7 +784,7 @@ async function searchVideos() {
     container.innerHTML = '<div class="loading">搜索中...</div>';
     
     try {
-        const response = await fetchWithAuth(`/api/videos?page=1&page_size=50&search=${encodeURIComponent(keyword)}`);
+        const response = await fetchWithAuth(`/api/videos?page=1&page_size=${getPageSize()}&search=${encodeURIComponent(keyword)}`);
         const result = await response.json();
         
         if (result.success) {
@@ -797,14 +827,12 @@ async function playVideo(videoId, title, tags, filePath) {
             
             document.getElementById('modalTitle').textContent = result.data.title;
             
-            // 渲染视频标签
             const tagsContainer = document.getElementById('modalTags');
             const childTags = tags.filter(t => t.parent_id);
             tagsContainer.innerHTML = childTags.map(t => 
                 `<span class="video-tag">${t.name}</span>`
             ).join('');
             
-            // 检查是否为非原生支持格式
             const fileExt = result.data.file_ext || '.mp4';
             const nonNativeFormats = ['.mkv', '.wmv', '.avi'];
             
@@ -834,12 +862,16 @@ async function playVideo(videoId, title, tags, filePath) {
                 videoElement.preload = 'auto';
                 videoElement.setAttribute('playsinline', '');
                 videoElement.setAttribute('webkit-playsinline', '');
+                videoElement.setAttribute('x5-video-player-type', 'h5');
+                videoElement.setAttribute('x5-video-player-fullscreen', 'true');
                 
                 const playerActions = document.querySelector('.player-actions');
                 playerContainer.insertBefore(videoElement, playerActions);
             }
             
-            const player = videojs('videoPlayer', {
+            const isMobile = window.innerWidth <= 1023;
+            
+            const playerOptions = {
                 fluid: true,
                 responsive: true,
                 muted: true,
@@ -855,8 +887,35 @@ async function playVideo(videoId, title, tags, filePath) {
                         'playbackRateMenuButton',
                         'fullscreenToggle'
                     ]
+                },
+                html5: {
+                    vhs: {
+                        overrideNative: !isMobile
+                    },
+                    nativeVideoTracks: isMobile,
+                    nativeAudioTracks: isMobile,
+                    nativeTextTracks: isMobile
+                },
+                userActions: {
+                    hotkeys: true
                 }
-            });
+            };
+            
+            if (isMobile) {
+                playerOptions.controlBar = {
+                    children: [
+                        'playToggle',
+                        'volumePanel',
+                        'currentTimeDisplay',
+                        'timeDivider',
+                        'durationDisplay',
+                        'progressControl',
+                        'fullscreenToggle'
+                    ]
+                };
+            }
+            
+            const player = videojs('videoPlayer', playerOptions);
             setVideoPlayer(player);
             
             getVideoPlayer().src({
@@ -867,15 +926,35 @@ async function playVideo(videoId, title, tags, filePath) {
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
             
+            if (isMobile) {
+                modal.classList.add('mobile-mode');
+            }
+            
             getVideoPlayer().ready(function() {
                 this.play().catch(function(error) {
                     console.log('自动播放失败，请手动点击播放:', error);
                 });
+                
+                if (isMobile) {
+                    this.on('fullscreenchange', function() {
+                        if (this.isFullscreen()) {
+                            modal.classList.add('is-fullscreen');
+                            if (screen.orientation && screen.orientation.lock) {
+                                screen.orientation.lock('landscape').catch(() => {});
+                            }
+                        } else {
+                            modal.classList.remove('is-fullscreen');
+                            if (screen.orientation && screen.orientation.unlock) {
+                                screen.orientation.unlock();
+                            }
+                        }
+                    });
+                }
             });
         }
     } catch (error) {
         console.error('获取视频信息失败:', error);
-        alert('无法播放视频: ' + error.message);
+        showToast('无法播放视频: ' + error.message, 'error');
     }
 }
 
@@ -910,38 +989,50 @@ function showToast(message, type = 'info') {
     if (!toast) {
         toast = document.createElement('div');
         toast.id = 'toast';
+        toast.className = 'toast';
         document.body.appendChild(toast);
     }
     
     const bgColors = {
-        info: 'rgba(229, 9, 20, 0.9)',
-        success: 'rgba(46, 125, 50, 0.9)',
-        warning: 'rgba(255, 152, 0, 0.9)',
-        error: 'rgba(244, 67, 54, 0.9)'
+        info: 'rgba(229, 9, 20, 0.95)',
+        success: 'rgba(46, 125, 50, 0.95)',
+        warning: 'rgba(255, 152, 0, 0.95)',
+        error: 'rgba(244, 67, 54, 0.95)'
     };
+    
+    const isMobile = window.innerWidth <= 1023;
     
     toast.style.cssText = `
         position: fixed;
-        bottom: 80px;
+        bottom: ${isMobile ? 'calc(80px + env(safe-area-inset-bottom, 0px))' : '80px'};
         left: 50%;
-        transform: translateX(-50%);
+        transform: translateX(-50%) translateY(100px);
         background: ${bgColors[type] || bgColors.info};
         color: #fff;
-        padding: 12px 24px;
-        border-radius: 8px;
-        font-size: 14px;
+        padding: ${isMobile ? '14px 20px' : '12px 24px'};
+        border-radius: ${isMobile ? '24px' : '8px'};
+        font-size: ${isMobile ? '15px' : '14px'};
         z-index: 3000;
         opacity: 0;
-        transition: opacity 0.3s;
-        max-width: 90%;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        max-width: calc(100vw - 32px);
         text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     `;
     
     toast.textContent = message;
-    toast.style.opacity = '1';
+    
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+    });
     
     setTimeout(() => {
         toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
     }, 3000);
 }
 
@@ -954,8 +1045,12 @@ function closeVideoModal() {
         setVideoPlayer(null);
     }
     
-    modal.classList.remove('show');
+    modal.classList.remove('show', 'mobile-mode', 'is-fullscreen');
     document.body.style.overflow = '';
+    
+    if (screen.orientation && screen.orientation.unlock) {
+        screen.orientation.unlock().catch(() => {});
+    }
 }
 
 /* ==================== 键盘事件处理 ==================== */
@@ -1239,7 +1334,7 @@ async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
         const requestBody = {
             tags_by_category: tagsByCategory,
             page: getCurrentPage(),
-            page_size: 50
+            page_size: getPageSize()
         };
         
         if (shuffle || getIsRandomOrder()) {

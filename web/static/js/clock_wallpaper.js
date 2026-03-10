@@ -307,6 +307,17 @@ function playRandomVideo() {
     isPlaying = true;
     
     video.load();
+    
+    const playOnLoad = () => {
+        video.play().catch(e => {
+            console.log('Auto-play prevented, will retry on user interaction:', e);
+        });
+        video.removeEventListener('canplaythrough', playOnLoad);
+        video.removeEventListener('loadeddata', playOnLoad);
+    };
+    
+    video.addEventListener('canplaythrough', playOnLoad);
+    video.addEventListener('loadeddata', playOnLoad);
 }
 
 /* ==================== 分段播放功能 ==================== */
@@ -397,13 +408,25 @@ function setupEventListeners() {
         if (segmentTimeout) {
             clearTimeout(segmentTimeout);
         }
-        if (browseMode && video.duration <= 60) {
-            playRandomVideo();
+        
+        if (browseMode) {
+            if (video.duration <= 60) {
+                playRandomVideo();
+            }
             return;
         }
-        if (!browseMode) {
-            playRandomVideo();
+        
+        playRandomVideo();
+    });
+    
+    video.addEventListener('error', (e) => {
+        console.error('Video error:', e);
+        if (segmentTimeout) {
+            clearTimeout(segmentTimeout);
         }
+        setTimeout(() => {
+            playRandomVideo();
+        }, 1000);
     });
     
     video.addEventListener('click', handleVideoClick);
@@ -421,8 +444,40 @@ function setupEventListeners() {
     playerContainer.addEventListener('mousemove', handleMouseMove);
     playerContainer.addEventListener('click', handleMouseMove);
     
+    playerContainer.addEventListener('touchstart', handleTouchStart, { passive: true });
+    playerContainer.addEventListener('touchend', handleTouchEnd, { passive: true });
+    
     document.addEventListener('keydown', handleKeydown);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+}
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartTime = 0;
+
+function handleTouchStart(e) {
+    if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+    }
+}
+
+function handleTouchEnd(e) {
+    if (e.changedTouches.length !== 1) return;
+    
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchDuration = Date.now() - touchStartTime;
+    
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+    
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50 && touchDuration < 500) {
+        if (diffX < 0) {
+            playRandomVideo();
+        }
+    }
 }
 
 /* ==================== 播放控制函数 ==================== */

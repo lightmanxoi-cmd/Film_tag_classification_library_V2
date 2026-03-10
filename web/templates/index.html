@@ -2,15 +2,36 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <meta name="theme-color" content="#141414">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="msapplication-tap-highlight" content="no">
     <title>Video Library - 奈飞风格视频库</title>
     <link rel="stylesheet" href="/static/css/base/_variables.css">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/mobile.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
+    <style>
+        :root {
+            --vh: 1vh;
+            --safe-area-top: env(safe-area-inset-top, 0px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-area-left: env(safe-area-inset-left, 0px);
+            --safe-area-right: env(safe-area-inset-right, 0px);
+        }
+        .touch-active {
+            opacity: 0.7;
+            transform: scale(0.98);
+            transition: all 0.1s ease;
+        }
+        .fast-scroll .video-card .video-overlay {
+            opacity: 0;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -137,8 +158,98 @@
         </div>
     </div>
 
+    <div class="mobile-bottom-bar" id="mobileBottomBar">
+        <button class="mobile-bottom-bar-item" onclick="toggleMobileSidebar()">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+            </svg>
+            <span>分类</span>
+        </button>
+        <button class="mobile-bottom-bar-item" onclick="openAdvancedFilter()">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+            </svg>
+            <span>筛选</span>
+        </button>
+        <button class="mobile-bottom-bar-item" id="mobileClockBtn" onclick="openClockWallpaper()" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+            </svg>
+            <span>时钟</span>
+        </button>
+        <button class="mobile-bottom-bar-item" id="mobileRandomBtn" onclick="openRandomRecommend()" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+            </svg>
+            <span>随机</span>
+        </button>
+        <button class="mobile-bottom-bar-item" onclick="toggleMobileSearch()">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+            <span>搜索</span>
+        </button>
+    </div>
+
     <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     <script type="module" src="/static/js/modules/compat.js"></script>
+    <script type="module">
+        import { initMobileOptimizations, showToast } from '/static/js/modules/mobile.js';
+        
+        window.showToast = showToast;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || window.innerWidth < 1024;
+            
+            if (isMobile) {
+                initMobileOptimizations({
+                    enablePullToRefresh: true,
+                    enableFastScroll: true,
+                    enableHapticFeedback: true,
+                    enableSwipeNavigation: true,
+                    onRefresh: () => {
+                        if (typeof loadVideos === 'function') {
+                            loadVideos(1);
+                        }
+                        return Promise.resolve();
+                    },
+                    onScrollDirectionChange: (direction) => {
+                        const bottomBar = document.getElementById('mobileBottomBar');
+                        if (bottomBar) {
+                            if (direction === 'down') {
+                                bottomBar.style.transform = 'translateY(100%)';
+                            } else {
+                                bottomBar.style.transform = 'translateY(0)';
+                            }
+                        }
+                    }
+                });
+                
+                const bottomBar = document.getElementById('mobileBottomBar');
+                if (bottomBar) {
+                    setTimeout(() => {
+                        bottomBar.classList.add('visible');
+                    }, 500);
+                }
+                
+                const originalApplyAdvancedFilter = window.applyAdvancedFilter;
+                if (typeof originalApplyAdvancedFilter === 'function') {
+                    window.applyAdvancedFilter = async function() {
+                        await originalApplyAdvancedFilter();
+                        
+                        const mobileClockBtn = document.getElementById('mobileClockBtn');
+                        const mobileRandomBtn = document.getElementById('mobileRandomBtn');
+                        
+                        if (mobileClockBtn) mobileClockBtn.disabled = false;
+                        if (mobileRandomBtn) mobileRandomBtn.disabled = false;
+                    };
+                }
+                
+                console.log('[Mobile] 移动端优化已启用');
+            }
+        });
+    </script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
