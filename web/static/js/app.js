@@ -486,26 +486,24 @@ function renderVideos(videos) {
         card.className = 'video-card';
         card.dataset.videoId = video.id;
         
-        // 获取文件扩展名并判断是否为原生支持格式
         const ext = video.file_path.split('.').pop().toLowerCase();
         const formatClass = ['mkv', 'wmv', 'avi'].includes(ext) ? 'non-native' : '';
         
-        // 只显示二级标签（有父标签的标签）
         const childTags = video.tags.filter(t => t.parent_id);
         const tagsHtml = childTags.slice(0, 3).map(t => 
             `<span class="video-tag">${t.name}</span>`
         ).join('');
         
-        // 设置缩略图样式
-        const thumbnailStyle = video.thumbnail ? 
-            `style="background-image: url('${video.thumbnail}'); background-size: cover; background-position: center;"` : '';
+        const thumbnailClass = video.thumbnail ? 'thumbnail lazy-loading' : 'thumbnail';
+        const thumbnailDataAttr = video.thumbnail ? 
+            `data-bg-image="url('${video.thumbnail}')"` : '';
+        const thumbnailStyle = video.thumbnail ? '' : '';
         
-        // GIF 预览元素（鼠标悬停时显示）
         const gifElement = video.gif ? 
-            `<img class="gif-preview" src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
+            `<img class="gif-preview lazy-loading" data-src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
         
         card.innerHTML = `
-            <div class="thumbnail ${formatClass}" ${thumbnailStyle}>
+            <div class="${thumbnailClass} ${formatClass}" ${thumbnailDataAttr} ${thumbnailStyle}>
                 ${!video.thumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
                 <span class="format-badge">${ext.toUpperCase()}</span>
                 ${gifElement}
@@ -516,7 +514,6 @@ function renderVideos(videos) {
             </div>
         `;
         
-        // 如果有 GIF，添加鼠标悬停切换效果
         if (video.gif) {
             const thumbnailDiv = card.querySelector('.thumbnail');
             const gifImg = card.querySelector('.gif-preview');
@@ -524,6 +521,12 @@ function renderVideos(videos) {
             card.addEventListener('mouseenter', () => {
                 thumbnailDiv.style.backgroundImage = 'none';
                 gifImg.style.display = 'block';
+                if (gifImg.dataset.src) {
+                    gifImg.src = gifImg.dataset.src;
+                    gifImg.removeAttribute('data-src');
+                    gifImg.classList.remove('lazy-loading');
+                    gifImg.classList.add('lazy-loaded');
+                }
             });
             
             card.addEventListener('mouseleave', () => {
@@ -534,9 +537,12 @@ function renderVideos(videos) {
             });
         }
         
-        // 点击卡片播放视频
         card.addEventListener('click', () => playVideo(video.id, video.title, video.tags, video.file_path));
         container.appendChild(card);
+    });
+    
+    setupLazyLoading('.thumbnail[data-bg-image], .gif-preview[data-src]', {
+        rootMargin: '200px'
     });
 }
 

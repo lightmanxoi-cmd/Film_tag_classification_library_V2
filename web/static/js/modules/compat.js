@@ -28,7 +28,14 @@ import {
     sessionManager, 
     initSessionTimeout,
     initTouchGestures, 
-    initSwipeToClose 
+    initSwipeToClose,
+    setupLazyLoading, 
+    observeLazyElement, 
+    unobserveLazyElement, 
+    destroyLazyLoading,
+    createLazyImage,
+    createLazyBackgroundImage,
+    preloadImages
 } from './utils/index.js';
 
 import { 
@@ -68,6 +75,14 @@ window.initSessionTimeout = initSessionTimeout;
 
 window.initTouchGestures = initTouchGestures;
 window.initSwipeToClose = initSwipeToClose;
+
+window.setupLazyLoading = setupLazyLoading;
+window.observeLazyElement = observeLazyElement;
+window.unobserveLazyElement = unobserveLazyElement;
+window.destroyLazyLoading = destroyLazyLoading;
+window.createLazyImage = createLazyImage;
+window.createLazyBackgroundImage = createLazyBackgroundImage;
+window.preloadImages = preloadImages;
 
 window.showToast = showToast;
 window.showSuccess = showSuccess;

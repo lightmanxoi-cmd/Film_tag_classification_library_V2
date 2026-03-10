@@ -7,3 +7,13 @@ export { getUrlParams, getQueryParam, setQueryParam, buildQueryString, encodeFil
 export { shuffleArray, createShuffledIndices, uniqueBy, groupBy } from './array.js';
 export { sessionManager, initSessionTimeout } from './session.js';
 export { initTouchGestures, initSwipeToClose } from './touch.js';
+export { 
+    setupLazyLoading, 
+    observeLazyElement, 
+    unobserveLazyElement, 
+    destroyLazyLoading,
+    createLazyImage,
+    createLazyBackgroundImage,
+    preloadImages,
+    lazyLoadObserver 
+} from './lazy-load.js';
