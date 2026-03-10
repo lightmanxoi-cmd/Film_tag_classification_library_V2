@@ -1,0 +1,155 @@
+.current-filter {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    margin-left: 280px;
+    margin-top: 64px;
+    background: rgba(229, 9, 14, 0.1);
+    border-bottom: 1px solid rgba(229, 9, 14, 0.2);
+}
+
+.current-filter.show {
+    display: flex;
+}
+
+.filter-label {
+    font-size: 13px;
+    color: #888;
+}
+
+.filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(229, 9, 14, 0.2);
+    border-radius: 20px;
+    font-size: 13px;
+    color: #fff;
+}
+
+.filter-tag .remove-tag {
+    width: 16px;
+    height: 16px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-filter-btn {
+    padding: 6px 16px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 20px;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clear-filter-btn:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.5);
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-input {
+    width: 200px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.search-input::placeholder {
+    color: #888;
+}
+
+.search-input:focus {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    margin-left: 280px;
+}
+
+.pagination button {
+    padding: 10px 20px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.2);
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-info {
+    font-size: 13px;
+    color: #888;
+}
+
+@media (max-width: 768px) {
+    .current-filter {
+        margin-left: 0;
+        padding: 10px 16px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-tag {
+        font-size: 12px;
+        padding: 4px 10px;
+    }
+    
+    .pagination {
+        margin-left: 0;
+        padding: 16px;
+        gap: 12px;
+    }
+    
+    .pagination button {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+    
+    .page-info {
+        font-size: 12px;
+    }
+}

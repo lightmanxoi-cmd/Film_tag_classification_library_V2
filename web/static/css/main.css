@@ -4,8 +4,11 @@
  * 导入所有 CSS 模块，包括：
  * - 设计令牌（变量）
  * - 重置样式
+ * - 布局样式
  * - 组件样式
  */
 
 @import url('./base/_variables.css');
 @import url('./base/_reset.css');
+@import url('./layout/_main.css');
+@import url('./components/index.css');

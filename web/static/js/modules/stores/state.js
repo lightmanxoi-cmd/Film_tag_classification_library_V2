@@ -13,9 +13,20 @@ class AppState {
             selectedFilterTags: [],
             selectedFilterTagsByCategory: {},
             randomSeed: Date.now(),
-            isRandomOrder: false
+            isRandomOrder: false,
+            videoPlayer: null,
+            currentVideoPath: '',
+            currentVideoId: null,
+            currentVideoTitle: '',
+            currentVideoTags: [],
+            isLoading: false,
+            searchQuery: '',
+            sidebarOpen: false,
+            filterModalOpen: false
         };
         this._listeners = new Map();
+        this._history = [];
+        this._maxHistory = 50;
     }
 
     get(key) {
@@ -24,12 +35,26 @@ class AppState {
 
     set(key, value) {
         const oldValue = this._state[key];
+        if (oldValue === value) return;
+        
         this._state[key] = value;
         this._notify(key, value, oldValue);
     }
 
     getAll() {
         return { ...this._state };
+    }
+
+    setMultiple(updates) {
+        const oldValues = {};
+        Object.keys(updates).forEach(key => {
+            oldValues[key] = this._state[key];
+            this._state[key] = updates[key];
+        });
+        
+        Object.keys(updates).forEach(key => {
+            this._notify(key, updates[key], oldValues[key]);
+        });
     }
 
     subscribe(key, callback) {
@@ -40,66 +65,162 @@ class AppState {
         return () => this._listeners.get(key).delete(callback);
     }
 
+    subscribeMultiple(keys, callback) {
+        const unsubscribers = keys.map(key => this.subscribe(key, callback));
+        return () => unsubscribers.forEach(unsub => unsub());
+    }
+
     _notify(key, newValue, oldValue) {
         if (this._listeners.has(key)) {
             this._listeners.get(key).forEach(callback => {
-                callback(newValue, oldValue);
+                try {
+                    callback(newValue, oldValue, key);
+                } catch (e) {
+                    console.error(`[AppState] Listener error for ${key}:`, e);
+                }
             });
         }
     }
 
     reset() {
-        this._state.currentPage = 1;
-        this._state.currentTagIds = [];
-        this._state.selectedFilterTags = [];
-        this._state.selectedFilterTagsByCategory = {};
-        this._state.randomSeed = Date.now();
-        this._state.isRandomOrder = false;
-        this._notify('reset', this._state, null);
+        const oldState = { ...this._state };
+        this._state = {
+            currentPage: 1,
+            currentTagIds: [],
+            allTags: oldState.allTags,
+            selectedFilterTags: [],
+            selectedFilterTagsByCategory: {},
+            randomSeed: Date.now(),
+            isRandomOrder: false,
+            videoPlayer: null,
+            currentVideoPath: '',
+            currentVideoId: null,
+            currentVideoTitle: '',
+            currentVideoTags: [],
+            isLoading: false,
+            searchQuery: '',
+            sidebarOpen: false,
+            filterModalOpen: false
+        };
+        this._notify('reset', this._state, oldState);
     }
 
     resetFilter() {
-        this._state.currentTagIds = [];
-        this._state.selectedFilterTags = [];
-        this._state.selectedFilterTagsByCategory = {};
-        this._state.randomSeed = Date.now();
-        this._state.isRandomOrder = false;
-        this._notify('filterReset', this._state, null);
+        this.setMultiple({
+            currentTagIds: [],
+            selectedFilterTags: [],
+            selectedFilterTagsByCategory: {},
+            randomSeed: Date.now(),
+            isRandomOrder: false
+        });
+        this._notify('filterReset', null, null);
     }
 
     addFilterTag(tagId, categoryId) {
-        const tags = this._state.selectedFilterTags;
+        const tags = [...this._state.selectedFilterTags];
         if (!tags.includes(tagId)) {
             tags.push(tagId);
         }
 
-        const byCategory = this._state.selectedFilterTagsByCategory;
+        const byCategory = { ...this._state.selectedFilterTagsByCategory };
         if (!byCategory[categoryId]) {
             byCategory[categoryId] = [];
         }
         if (!byCategory[categoryId].includes(tagId)) {
-            byCategory[categoryId].push(tagId);
+            byCategory[categoryId] = [...byCategory[categoryId], tagId];
         }
 
-        this._notify('filterTagsChanged', this._state.selectedFilterTags, null);
+        this.setMultiple({
+            selectedFilterTags: tags,
+            selectedFilterTagsByCategory: byCategory
+        });
     }
 
     removeFilterTag(tagId, categoryId) {
-        const tags = this._state.selectedFilterTags;
-        const index = tags.indexOf(tagId);
-        if (index > -1) {
-            tags.splice(index, 1);
-        }
+        const tags = this._state.selectedFilterTags.filter(t => t !== tagId);
 
-        const byCategory = this._state.selectedFilterTagsByCategory;
+        const byCategory = { ...this._state.selectedFilterTagsByCategory };
         if (byCategory[categoryId]) {
-            const catIndex = byCategory[categoryId].indexOf(tagId);
-            if (catIndex > -1) {
-                byCategory[categoryId].splice(catIndex, 1);
+            byCategory[categoryId] = byCategory[categoryId].filter(t => t !== tagId);
+            if (byCategory[categoryId].length === 0) {
+                delete byCategory[categoryId];
             }
         }
 
-        this._notify('filterTagsChanged', this._state.selectedFilterTags, null);
+        this.setMultiple({
+            selectedFilterTags: tags,
+            selectedFilterTagsByCategory: byCategory
+        });
+    }
+
+    setCurrentVideo(video) {
+        this.setMultiple({
+            currentVideoId: video.id,
+            currentVideoTitle: video.title,
+            currentVideoTags: video.tags,
+            currentVideoPath: video.path
+        });
+    }
+
+    clearCurrentVideo() {
+        this.setMultiple({
+            currentVideoId: null,
+            currentVideoTitle: '',
+            currentVideoTags: [],
+            currentVideoPath: ''
+        });
+    }
+
+    setLoading(loading) {
+        this.set('isLoading', loading);
+    }
+
+    toggleSidebar() {
+        this.set('sidebarOpen', !this._state.sidebarOpen);
+    }
+
+    toggleFilterModal() {
+        this.set('filterModalOpen', !this._state.filterModalOpen);
+    }
+
+    persist(key = 'appState') {
+        try {
+            const persistableState = {
+                currentPage: this._state.currentPage,
+                randomSeed: this._state.randomSeed,
+                isRandomOrder: this._state.isRandomOrder
+            };
+            localStorage.setItem(key, JSON.stringify(persistableState));
+        } catch (e) {
+            console.warn('[AppState] Failed to persist state:', e);
+        }
+    }
+
+    restore(key = 'appState') {
+        try {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                this.setMultiple(parsed);
+                return true;
+            }
+        } catch (e) {
+            console.warn('[AppState] Failed to restore state:', e);
+        }
+        return false;
+    }
+
+    createComputed(computeFn, dependencies) {
+        let cachedValue = computeFn(this._state);
+        
+        const unsubscribe = this.subscribeMultiple(dependencies, () => {
+            cachedValue = computeFn(this._state);
+        });
+
+        return {
+            get: () => cachedValue,
+            destroy: unsubscribe
+        };
     }
 }
 
@@ -112,5 +233,14 @@ export const stateKeys = {
     SELECTED_FILTER_TAGS: 'selectedFilterTags',
     SELECTED_FILTER_TAGS_BY_CATEGORY: 'selectedFilterTagsByCategory',
     RANDOM_SEED: 'randomSeed',
-    IS_RANDOM_ORDER: 'isRandomOrder'
+    IS_RANDOM_ORDER: 'isRandomOrder',
+    VIDEO_PLAYER: 'videoPlayer',
+    CURRENT_VIDEO_PATH: 'currentVideoPath',
+    CURRENT_VIDEO_ID: 'currentVideoId',
+    CURRENT_VIDEO_TITLE: 'currentVideoTitle',
+    CURRENT_VIDEO_TAGS: 'currentVideoTags',
+    IS_LOADING: 'isLoading',
+    SEARCH_QUERY: 'searchQuery',
+    SIDEBAR_OPEN: 'sidebarOpen',
+    FILTER_MODAL_OPEN: 'filterModalOpen'
 };

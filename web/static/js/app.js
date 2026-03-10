@@ -19,22 +19,23 @@
  * 创建时间：2024
  */
 
-/* ==================== 全局变量定义 ==================== */
+/* ==================== 状态管理 ==================== */
 
-/** 当前页码 */
-let currentPage = 1;
-
-/** 当前选中的标签ID列表 */
-let currentTagIds = [];
-
-/** 所有标签数据（用于高级筛选） */
-let allTags = [];
-
-/** Video.js 播放器实例 */
-let videoPlayer = null;
-
-/** 当前播放视频的文件路径 */
-let currentVideoPath = '';
+/**
+ * 使用 appState 状态管理模块
+ * 所有全局状态通过 appState 统一管理
+ * 
+ * 状态键：
+ * - currentPage: 当前页码
+ * - currentTagIds: 当前选中的标签ID列表
+ * - allTags: 所有标签数据
+ * - videoPlayer: Video.js 播放器实例
+ * - currentVideoPath: 当前播放视频的文件路径
+ * - randomSeed: 随机种子
+ * - isRandomOrder: 是否随机排序
+ * - selectedFilterTags: 高级筛选选中的标签
+ * - selectedFilterTagsByCategory: 按分类分组的筛选标签
+ */
 
 /** 触摸开始时的X坐标（用于滑动手势） */
 let touchStartX = 0;
@@ -42,17 +43,79 @@ let touchStartX = 0;
 /** 触摸开始时的Y坐标（用于滑动手势） */
 let touchStartY = 0;
 
-/** 随机种子（用于随机排序） */
-let randomSeed = Date.now();
+/* ==================== 状态访问便捷方法 ==================== */
 
-/** 当前是否处于随机排序模式 */
-let isRandomOrder = false;
+function getCurrentPage() {
+    return appState.get('currentPage');
+}
 
-/** 高级筛选选中的标签ID列表 */
-let selectedFilterTags = [];
+function setCurrentPage(page) {
+    appState.set('currentPage', page);
+}
 
-/** 高级筛选按分类分组的标签 {categoryId: [tagId, ...]} */
-let selectedFilterTagsByCategory = {};
+function getCurrentTagIds() {
+    return appState.get('currentTagIds');
+}
+
+function setCurrentTagIds(ids) {
+    appState.set('currentTagIds', ids);
+}
+
+function getAllTags() {
+    return appState.get('allTags');
+}
+
+function setAllTags(tags) {
+    appState.set('allTags', tags);
+}
+
+function getVideoPlayer() {
+    return appState.get('videoPlayer');
+}
+
+function setVideoPlayer(player) {
+    appState.set('videoPlayer', player);
+}
+
+function getCurrentVideoPath() {
+    return appState.get('currentVideoPath');
+}
+
+function setCurrentVideoPath(path) {
+    appState.set('currentVideoPath', path);
+}
+
+function getRandomSeed() {
+    return appState.get('randomSeed');
+}
+
+function setRandomSeed(seed) {
+    appState.set('randomSeed', seed);
+}
+
+function getIsRandomOrder() {
+    return appState.get('isRandomOrder');
+}
+
+function setIsRandomOrder(value) {
+    appState.set('isRandomOrder', value);
+}
+
+function getSelectedFilterTags() {
+    return appState.get('selectedFilterTags');
+}
+
+function setSelectedFilterTags(tags) {
+    appState.set('selectedFilterTags', tags);
+}
+
+function getSelectedFilterTagsByCategory() {
+    return appState.get('selectedFilterTagsByCategory');
+}
+
+function setSelectedFilterTagsByCategory(obj) {
+    appState.set('selectedFilterTagsByCategory', obj);
+}
 
 /* ==================== 认证与请求模块 ==================== */
 
@@ -302,7 +365,7 @@ function mobileSearchVideos() {
         return;
     }
     
-    currentTagIds = [];
+    setCurrentTagIds([]);
     document.getElementById('currentFilter').style.display = 'none';
     
     const container = document.getElementById('videoGrid');
@@ -342,7 +405,7 @@ async function loadTagTree() {
         const result = await response.json();
         
         if (result.success) {
-            allTags = result.data;
+            setAllTags(result.data);
             renderTagTree(result.data);
         }
     } catch (error) {
@@ -420,22 +483,21 @@ function renderTagTree(tags) {
  * @param {number} page - 页码，默认为1
  */
 async function loadVideos(page = 1) {
-    currentPage = page;
+    setCurrentPage(page);
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">加载中...</div>';
     
     try {
         let result;
         
-        if (currentTagIds.length > 0) {
-            // 按标签筛选视频
+        if (getCurrentTagIds().length > 0) {
             const response = await fetchWithAuth('/api/videos/by-tags', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    tag_ids: currentTagIds,
+                    tag_ids: getCurrentTagIds(),
                     page: page,
                     page_size: 50,
                     match_all: false
@@ -444,7 +506,7 @@ async function loadVideos(page = 1) {
             result = await response.json();
         } else {
             // 随机加载视频
-            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50&random=true&seed=${randomSeed}`);
+            const response = await fetchWithAuth(`/api/videos?page=${page}&page_size=50&random=true&seed=${getRandomSeed()}`);
             result = await response.json();
         }
         
@@ -561,10 +623,10 @@ function renderPagination(data) {
         return;
     }
     
-    const prevOnClick = Object.keys(selectedFilterTagsByCategory).length > 0
+    const prevOnClick = Object.keys(getSelectedFilterTagsByCategory()).length > 0
         ? `goToAdvancedFilterPage(${data.page - 1})`
         : `loadVideos(${data.page - 1})`;
-    const nextOnClick = Object.keys(selectedFilterTagsByCategory).length > 0
+    const nextOnClick = Object.keys(getSelectedFilterTagsByCategory()).length > 0
         ? `goToAdvancedFilterPage(${data.page + 1})`
         : `loadVideos(${data.page + 1})`;
     
@@ -581,14 +643,9 @@ function renderPagination(data) {
     container.innerHTML = html;
 }
 
-/**
- * 高级筛选模式下的翻页
- * 
- * @param {number} page - 目标页码
- */
 function goToAdvancedFilterPage(page) {
-    currentPage = page;
-    loadVideosByTagsAdvanced(selectedFilterTagsByCategory, false);
+    setCurrentPage(page);
+    loadVideosByTagsAdvanced(getSelectedFilterTagsByCategory(), false);
 }
 
 /* ==================== 筛选模块 ==================== */
@@ -602,7 +659,6 @@ function goToAdvancedFilterPage(page) {
  * @param {string} tagName - 标签名称
  */
 function filterByTag(tagId, tagName) {
-    // 更新选中状态
     document.querySelectorAll('.tag-child').forEach(el => {
         el.classList.remove('active');
         if (parseInt(el.dataset.tagId) === tagId) {
@@ -610,12 +666,11 @@ function filterByTag(tagId, tagName) {
         }
     });
     
-    currentTagIds = [tagId];
-    selectedFilterTagsByCategory = {};
-    isRandomOrder = false;
-    randomSeed = Date.now();
+    setCurrentTagIds([tagId]);
+    setSelectedFilterTagsByCategory({});
+    setIsRandomOrder(false);
+    setRandomSeed(Date.now());
     
-    // 显示当前筛选条件
     const filterContainer = document.getElementById('currentFilter');
     filterContainer.style.display = 'flex';
     document.getElementById('filterTags').innerHTML = `
@@ -626,17 +681,12 @@ function filterByTag(tagId, tagName) {
     loadVideos(1);
 }
 
-/**
- * 清除所有筛选条件
- * 
- * 重置筛选状态并重新加载视频列表。
- */
 function clearFilter() {
-    currentTagIds = [];
-    selectedFilterTags = [];
-    selectedFilterTagsByCategory = {};
-    randomSeed = Date.now();
-    isRandomOrder = false;
+    setCurrentTagIds([]);
+    setSelectedFilterTags([]);
+    setSelectedFilterTagsByCategory({});
+    setRandomSeed(Date.now());
+    setIsRandomOrder(false);
     
     document.querySelectorAll('.tag-child').forEach(el => {
         el.classList.remove('active');
@@ -658,52 +708,37 @@ function clearFilter() {
  * 跳转到时钟壁纸页面，需要先进行多级筛选。
  */
 function openClockWallpaper() {
-    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
     
-    const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
+    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
     window.location.href = `/clock-wallpaper?filter=${params}`;
 }
 
-/**
- * 打开多屏播放模式
- * 
- * 跳转到四屏同时播放页面，需要先进行多级筛选。
- */
 function openMultiPlay() {
-    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
     
-    const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
+    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
     window.location.href = `/multi-play?filter=${params}`;
 }
 
-/**
- * 打开随机推荐模式
- * 
- * 跳转到随机推荐播放页面，需要先进行多级筛选。
- */
 function openRandomRecommend() {
-    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
     
-    const params = encodeURIComponent(JSON.stringify(selectedFilterTagsByCategory));
+    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
     window.location.href = `/random-recommend?filter=${params}`;
 }
 
 /* ==================== 搜索模块 ==================== */
 
-/**
- * 搜索视频
- * 
- * 根据关键词搜索视频并更新列表。
- */
 async function searchVideos() {
     const keyword = document.getElementById('searchInput').value.trim();
     
@@ -712,7 +747,7 @@ async function searchVideos() {
         return;
     }
     
-    currentTagIds = [];
+    setCurrentTagIds([]);
     document.getElementById('currentFilter').style.display = 'none';
     
     const container = document.getElementById('videoGrid');
@@ -751,9 +786,8 @@ async function searchVideos() {
  */
 async function playVideo(videoId, title, tags, filePath) {
     try {
-        currentVideoPath = filePath;
+        setCurrentVideoPath(filePath);
         
-        // 获取视频流信息
         const response = await fetchWithAuth(`/api/video/stream/${videoId}`);
         const result = await response.json();
         
@@ -780,21 +814,18 @@ async function playVideo(videoId, title, tags, filePath) {
                 formatNotice.style.display = 'none';
             }
             
-            // 初始化或重置视频播放器
             const playerContainer = document.querySelector('.modal-content');
             let videoElement = document.getElementById('videoPlayer');
             
-            // 销毁旧播放器实例
-            if (videoPlayer) {
+            if (getVideoPlayer()) {
                 try {
-                    videoPlayer.dispose();
+                    getVideoPlayer().dispose();
                 } catch (e) {
                     console.log('Dispose error:', e);
                 }
-                videoPlayer = null;
+                setVideoPlayer(null);
             }
             
-            // 创建新的视频元素
             if (!videoElement || !document.body.contains(videoElement)) {
                 videoElement = document.createElement('video');
                 videoElement.id = 'videoPlayer';
@@ -808,8 +839,7 @@ async function playVideo(videoId, title, tags, filePath) {
                 playerContainer.insertBefore(videoElement, playerActions);
             }
             
-            // 初始化 Video.js 播放器
-            videoPlayer = videojs('videoPlayer', {
+            const player = videojs('videoPlayer', {
                 fluid: true,
                 responsive: true,
                 muted: true,
@@ -827,19 +857,17 @@ async function playVideo(videoId, title, tags, filePath) {
                     ]
                 }
             });
+            setVideoPlayer(player);
             
-            // 设置视频源
-            videoPlayer.src({
+            getVideoPlayer().src({
                 src: result.data.stream_url,
                 type: getMimeType(fileExt)
             });
             
-            // 显示模态框
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
             
-            // 尝试自动播放
-            videoPlayer.ready(function() {
+            getVideoPlayer().ready(function() {
                 this.play().catch(function(error) {
                     console.log('自动播放失败，请手动点击播放:', error);
                 });
@@ -917,17 +945,13 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-/**
- * 关闭视频播放模态框
- */
 function closeVideoModal() {
     const modal = document.getElementById('videoModal');
     
-    // 销毁播放器实例
-    if (videoPlayer) {
-        videoPlayer.pause();
-        videoPlayer.dispose();
-        videoPlayer = null;
+    if (getVideoPlayer()) {
+        getVideoPlayer().pause();
+        getVideoPlayer().dispose();
+        setVideoPlayer(null);
     }
     
     modal.classList.remove('show');
@@ -1011,26 +1035,25 @@ function closeAdvancedFilter() {
     document.body.style.overflow = '';
 }
 
-/**
- * 渲染高级筛选标签列表
- * 
- * 将所有标签按分类渲染为可选择的列表。
- */
 function renderFilterTags() {
     const container = document.getElementById('filterTagsContainer');
     
-    if (!allTags || allTags.length === 0) {
+    const tags = getAllTags();
+    const filterTags = getSelectedFilterTags();
+    const filterTagsByCategory = getSelectedFilterTagsByCategory();
+    
+    if (!tags || tags.length === 0) {
         container.innerHTML = '<div class="loading">请等待标签加载...</div>';
         return;
     }
     
     container.innerHTML = '';
     
-    allTags.forEach(category => {
+    tags.forEach(category => {
         const categoryDiv = document.createElement('div');
         categoryDiv.className = 'filter-category';
         
-        const selectedInCategory = selectedFilterTagsByCategory[category.id] || [];
+        const selectedInCategory = filterTagsByCategory[category.id] || [];
         
         categoryDiv.innerHTML = `
             <div class="filter-category-header" onclick="toggleFilterCategory(this)">
@@ -1039,9 +1062,9 @@ function renderFilterTags() {
             </div>
             <div class="filter-category-tags">
                 ${category.children.map(tag => `
-                    <label class="filter-tag-item ${selectedFilterTags.includes(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-category-id="${category.id}">
+                    <label class="filter-tag-item ${filterTags.includes(tag.id) ? 'selected' : ''}" data-tag-id="${tag.id}" data-category-id="${category.id}">
                         <input type="checkbox" 
-                               ${selectedFilterTags.includes(tag.id) ? 'checked' : ''} 
+                               ${filterTags.includes(tag.id) ? 'checked' : ''} 
                                onchange="toggleFilterTag(${tag.id}, ${category.id}, '${tag.name.replace(/'/g, "\\'")}')">
                         <span>${tag.name}</span>
                         <span class="tag-count">${tag.video_count || 0}</span>
@@ -1054,45 +1077,21 @@ function renderFilterTags() {
     });
 }
 
-/**
- * 切换筛选分类的展开/收起状态
- * 
- * @param {HTMLElement} header - 分类标题元素
- */
 function toggleFilterCategory(header) {
     const category = header.parentElement;
     category.classList.toggle('collapsed');
 }
 
-/**
- * 切换标签选中状态
- * 
- * @param {number} tagId - 标签ID
- * @param {number} categoryId - 所属分类ID
- * @param {string} tagName - 标签名称
- */
 function toggleFilterTag(tagId, categoryId, tagName) {
-    const index = selectedFilterTags.indexOf(tagId);
+    const filterTags = getSelectedFilterTags();
+    const index = filterTags.indexOf(tagId);
     
     if (index === -1) {
-        // 添加选中
-        selectedFilterTags.push(tagId);
-        if (!selectedFilterTagsByCategory[categoryId]) {
-            selectedFilterTagsByCategory[categoryId] = [];
-        }
-        selectedFilterTagsByCategory[categoryId].push(tagId);
+        appState.addFilterTag(tagId, categoryId);
     } else {
-        // 取消选中
-        selectedFilterTags.splice(index, 1);
-        if (selectedFilterTagsByCategory[categoryId]) {
-            const catIndex = selectedFilterTagsByCategory[categoryId].indexOf(tagId);
-            if (catIndex !== -1) {
-                selectedFilterTagsByCategory[categoryId].splice(catIndex, 1);
-            }
-        }
+        appState.removeFilterTag(tagId, categoryId);
     }
     
-    // 更新选中状态样式
     const tagItem = document.querySelector(`.filter-tag-item[data-tag-id="${tagId}"]`);
     if (tagItem) {
         tagItem.classList.toggle('selected');
@@ -1101,22 +1100,21 @@ function toggleFilterTag(tagId, categoryId, tagName) {
     updateSelectedTagsList();
 }
 
-/**
- * 更新已选标签列表显示
- */
 function updateSelectedTagsList() {
     const container = document.getElementById('selectedTagsList');
+    const filterTags = getSelectedFilterTags();
+    const filterTagsByCategory = getSelectedFilterTagsByCategory();
+    const tags = getAllTags();
     
-    if (selectedFilterTags.length === 0) {
+    if (filterTags.length === 0) {
         container.innerHTML = '<span class="no-selection">未选择任何标签</span>';
         return;
     }
     
-    // 收集已选标签信息
     const selectedTagsInfo = [];
-    allTags.forEach(category => {
+    tags.forEach(category => {
         category.children.forEach(tag => {
-            if (selectedFilterTags.includes(tag.id)) {
+            if (filterTags.includes(tag.id)) {
                 selectedTagsInfo.push({ id: tag.id, name: tag.name, categoryId: category.id });
             }
         });
@@ -1130,26 +1128,9 @@ function updateSelectedTagsList() {
     `).join('');
 }
 
-/**
- * 移除单个筛选标签
- * 
- * @param {number} tagId - 标签ID
- * @param {number} categoryId - 所属分类ID
- */
 function removeFilterTag(tagId, categoryId) {
-    const index = selectedFilterTags.indexOf(tagId);
-    if (index !== -1) {
-        selectedFilterTags.splice(index, 1);
-    }
+    appState.removeFilterTag(tagId, categoryId);
     
-    if (selectedFilterTagsByCategory[categoryId]) {
-        const catIndex = selectedFilterTagsByCategory[categoryId].indexOf(tagId);
-        if (catIndex !== -1) {
-            selectedFilterTagsByCategory[categoryId].splice(catIndex, 1);
-        }
-    }
-    
-    // 更新UI状态
     const tagItem = document.querySelector(`.filter-tag-item[data-tag-id="${tagId}"]`);
     if (tagItem) {
         tagItem.classList.remove('selected');
@@ -1159,12 +1140,9 @@ function removeFilterTag(tagId, categoryId) {
     updateSelectedTagsList();
 }
 
-/**
- * 清除所有筛选选择
- */
 function clearFilterSelection() {
-    selectedFilterTags = [];
-    selectedFilterTagsByCategory = {};
+    setSelectedFilterTags([]);
+    setSelectedFilterTagsByCategory({});
     
     document.querySelectorAll('.filter-tag-item.selected').forEach(item => {
         item.classList.remove('selected');
@@ -1174,33 +1152,29 @@ function clearFilterSelection() {
     updateSelectedTagsList();
 }
 
-/**
- * 应用高级筛选
- * 
- * 根据选中的标签筛选视频。
- * 支持多分类组合筛选（AND 关系）和同分类内多选（OR 关系）。
- */
 async function applyAdvancedFilter() {
-    if (selectedFilterTags.length === 0) {
+    const filterTags = getSelectedFilterTags();
+    const filterTagsByCategory = getSelectedFilterTagsByCategory();
+    const tags = getAllTags();
+    
+    if (filterTags.length === 0) {
         showToast('请至少选择一个标签');
         return;
     }
     
     closeAdvancedFilter();
     
-    currentTagIds = [...selectedFilterTags];
-    currentPage = 1;
-    isRandomOrder = false;
-    randomSeed = Date.now();
+    setCurrentTagIds([...filterTags]);
+    setCurrentPage(1);
+    setIsRandomOrder(false);
+    setRandomSeed(Date.now());
     
-    // 显示筛选条件
     const filterContainer = document.getElementById('currentFilter');
     const filterTagsSpan = document.getElementById('filterTags');
     
-    // 按分类组织筛选条件显示
     const categoryGroups = [];
-    allTags.forEach(category => {
-        const selectedInCategory = (selectedFilterTagsByCategory[category.id] || []);
+    tags.forEach(category => {
+        const selectedInCategory = (filterTagsByCategory[category.id] || []);
         if (selectedInCategory.length > 0) {
             const tagNames = category.children
                 .filter(tag => selectedInCategory.includes(tag.id))
@@ -1212,7 +1186,6 @@ async function applyAdvancedFilter() {
         }
     });
     
-    // 生成筛选条件HTML
     let filterHtml = '';
     categoryGroups.forEach((group, index) => {
         if (index > 0) {
@@ -1229,46 +1202,35 @@ async function applyAdvancedFilter() {
     filterTagsSpan.innerHTML = filterHtml;
     filterContainer.style.display = 'flex';
     
-    // 启用特殊播放模式按钮
     document.getElementById('clockWallpaperBtn').disabled = false;
     document.getElementById('multiPlayBtn').disabled = false;
     document.getElementById('randomRecommendBtn').disabled = false;
     document.getElementById('shuffleBtn').disabled = false;
     
-    await loadVideosByTagsAdvanced(selectedFilterTagsByCategory);
+    await loadVideosByTagsAdvanced(filterTagsByCategory);
 }
 
-/**
- * 随机打乱视频顺序
- * 
- * 生成新的随机种子，对所有筛选结果进行整体随机排序，
- * 然后从第一页开始显示。
- */
 async function shuffleVideos() {
-    if (Object.keys(selectedFilterTagsByCategory).length === 0) {
+    const filterTagsByCategory = getSelectedFilterTagsByCategory();
+    
+    if (Object.keys(filterTagsByCategory).length === 0) {
         return;
     }
     
     const shuffleBtn = document.getElementById('shuffleBtn');
     shuffleBtn.classList.add('shuffling');
     
-    randomSeed = Date.now();
-    isRandomOrder = true;
-    currentPage = 1;
+    setRandomSeed(Date.now());
+    setIsRandomOrder(true);
+    setCurrentPage(1);
     
-    await loadVideosByTagsAdvanced(selectedFilterTagsByCategory, true);
+    await loadVideosByTagsAdvanced(filterTagsByCategory, true);
     
     setTimeout(() => {
         shuffleBtn.classList.remove('shuffling');
     }, 300);
 }
 
-/**
- * 按高级筛选条件加载视频
- * 
- * @param {Object} tagsByCategory - 按分类分组的标签 {categoryId: [tagId, ...]}
- * @param {boolean} shuffle - 是否随机打乱顺序
- */
 async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
     const container = document.getElementById('videoGrid');
     container.innerHTML = '<div class="loading">加载中...</div>';
@@ -1276,13 +1238,13 @@ async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false) {
     try {
         const requestBody = {
             tags_by_category: tagsByCategory,
-            page: currentPage,
+            page: getCurrentPage(),
             page_size: 50
         };
         
-        if (shuffle || isRandomOrder) {
+        if (shuffle || getIsRandomOrder()) {
             requestBody.random_order = true;
-            requestBody.random_seed = randomSeed;
+            requestBody.random_seed = getRandomSeed();
         }
         
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
