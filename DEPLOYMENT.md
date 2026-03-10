@@ -1,15 +1,59 @@
 # 生产环境部署指南
 
+## 目录
+
+1. [概述](#概述)
+2. [环境要求](#环境要求)
+3. [快速开始](#快速开始)
+4. [详细配置](#详细配置)
+5. [Docker 部署](#docker-部署)
+6. [Windows 服务部署](#windows-服务部署)
+7. [Linux 系统部署](#linux-系统部署)
+8. [Nginx 反向代理](#nginx-反向代理推荐)
+9. [HTTPS 配置](#https-配置)
+10. [监控和日志](#监控和日志)
+11. [备份和恢复](#备份和恢复)
+12. [故障排除](#故障排除)
+13. [安全建议](#安全建议)
+
+---
+
 ## 概述
 
 本文档介绍如何将视频标签管理系统部署到生产环境，使用 Waitress WSGI 服务器替代 Flask 开发服务器。
 
+### 部署架构
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Nginx     │────▶│   Waitress  │────▶│   Flask     │
+│  (反向代理)  │     │  (WSGI服务器) │     │  (应用)     │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │                                        │
+       ▼                                        ▼
+┌─────────────┐                         ┌─────────────┐
+│  静态文件    │                         │   SQLite    │
+│  (CSS/JS)   │                         │  (数据库)    │
+└─────────────┘                         └─────────────┘
+```
+
 ## 环境要求
 
-- Python 3.8+
+### 硬件要求
+
+| 配置项 | 最低要求 | 推荐配置 |
+|--------|----------|----------|
+| CPU | 2核 | 4核+ |
+| 内存 | 2GB | 4GB+ |
+| 磁盘 | 10GB | 根据视频量决定 |
+| 网络 | 100Mbps | 1Gbps |
+
+### 软件要求
+
+- Python 3.8+ (推荐 3.10+)
 - Windows/Linux/macOS
-- 至少 2GB 内存
-- 足够的磁盘空间存储视频文件
+- SQLite 3.x
+- FFmpeg (可选，用于缩略图生成)
 
 ## 快速开始
 
@@ -195,6 +239,157 @@ server {
 }
 ```
 
+## Docker 部署
+
+### Dockerfile
+
+创建 `Dockerfile`：
+
+```dockerfile
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Python 依赖
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install waitress
+
+# 复制应用代码
+COPY . .
+
+# 创建必要目录
+RUN mkdir -p logs backups
+
+# 暴露端口
+EXPOSE 5000
+
+# 启动命令
+CMD ["python", "run_production.py", "-H", "0.0.0.0", "-p", "5000"]
+```
+
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  videotag:
+    build: .
+    container_name: videotag
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./video_library.db:/app/video_library.db
+      - ./backups:/app/backups
+      - ./logs:/app/logs
+      - ${VIDEO_BASE_PATH}:/videos:ro
+    environment:
+      - VIDEO_BASE_PATH=/videos
+      - SECRET_KEY=${SECRET_KEY}
+      - FLASK_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+### Docker 部署命令
+
+```bash
+# 构建镜像
+docker build -t videotag:latest .
+
+# 运行容器
+docker run -d \
+  --name videotag \
+  -p 5000:5000 \
+  -v $(pwd)/video_library.db:/app/video_library.db \
+  -v /path/to/videos:/videos:ro \
+  -e VIDEO_BASE_PATH=/videos \
+  -e SECRET_KEY=your-secret-key \
+  videotag:latest
+
+# 使用 docker-compose
+docker-compose up -d
+```
+
+## HTTPS 配置
+
+### 使用 Let's Encrypt (推荐)
+
+1. 安装 Certbot：
+```bash
+# Ubuntu/Debian
+sudo apt install certbot python3-certbot-nginx
+
+# CentOS
+sudo yum install certbot python3-certbot-nginx
+```
+
+2. 获取证书：
+```bash
+sudo certbot --nginx -d your-domain.com
+```
+
+3. 自动续期：
+```bash
+sudo certbot renew --dry-run
+```
+
+### 手动配置 HTTPS
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+}
+
+# HTTP 重定向到 HTTPS
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+### Flask HTTPS 配置
+
+在 `.env` 文件中添加：
+
+```env
+SESSION_COOKIE_SECURE=True
+SESSION_COOKIE_HTTPONLY=True
+SESSION_COOKIE_SAMESITE=Lax
+```
+
 ## 监控和日志
 
 ### 查看日志
@@ -300,15 +495,104 @@ sudo systemctl restart videotag
 
 ## 安全建议
 
-1. **修改默认密码**
-2. **使用 HTTPS**
-3. **配置防火墙**
-4. **定期更新依赖**
-5. **启用访问日志**
-6. **设置文件权限**
+### 1. 密码安全
 
-## 联系支持
+- **修改默认密码**: 首次登录后立即修改默认密码
+- **密码复杂度**: 使用至少8位，包含大小写字母、数字和特殊字符
+- **定期更换**: 建议每3-6个月更换一次密码
+
+### 2. 网络安全
+
+- **使用 HTTPS**: 生产环境必须启用 HTTPS
+- **配置防火墙**: 只开放必要端口（80、443）
+- **限制访问**: 可配置 IP 白名单限制访问
+
+```nginx
+# Nginx IP 白名单
+location / {
+    allow 192.168.1.0/24;
+    allow 10.0.0.0/8;
+    deny all;
+    proxy_pass http://127.0.0.1:5000;
+}
+```
+
+### 3. 应用安全
+
+- **修改 SECRET_KEY**: 生产环境必须修改
+- **关闭调试模式**: 确保 `FLASK_DEBUG=false`
+- **会话超时**: 设置合理的会话超时时间
+
+### 4. 文件权限
+
+```bash
+# Linux 文件权限设置
+chmod 600 .env                    # 配置文件仅所有者可读写
+chmod 600 video_library.db        # 数据库仅所有者可读写
+chmod 755 web/static              # 静态文件可读
+chmod -R 755 backups              # 备份目录
+```
+
+### 5. 定期更新
+
+```bash
+# 更新 Python 依赖
+pip install --upgrade pip
+pip install --upgrade -r requirements.txt
+
+# 检查安全漏洞
+pip install safety
+safety check
+```
+
+### 6. 日志审计
+
+- 启用访问日志记录
+- 定期检查异常登录
+- 监控 API 调用频率
+
+### 7. 备份策略
+
+- 每日自动备份数据库
+- 异地备份重要数据
+- 定期测试恢复流程
+
+---
+
+## 性能调优
+
+### 数据库优化
+
+```bash
+# 运行索引优化
+python tools/optimize_database_indexes.py
+
+# 定期 VACUUM（SQLite）
+sqlite3 video_library.db "VACUUM;"
+```
+
+### 缓存配置
+
+```env
+# 缓存配置
+CACHE_CLEANUP_INTERVAL=300        # 缓存清理间隔（秒）
+CACHE_MAX_SIZE=1000               # 最大缓存条目数
+```
+
+### 视频流优化
+
+```python
+# run_production.py 参数调优
+VIDEO_STREAM_CHUNK_SIZE = 1024 * 1024    # 1MB 块大小
+VIDEO_CACHE_MAX_AGE = 3600               # 缓存时间
+VIDEO_STREAM_BUFFER_SIZE = 64 * 1024     # 缓冲区大小
+```
+
+---
+
+## 相关文档
 
 如有问题，请查看：
+- [USER_GUIDE.md](USER_GUIDE.md) - 用户使用手册
 - [DATABASE_OPTIMIZATION.md](DATABASE_OPTIMIZATION.md) - 数据库优化说明
-- [README.md](README.md) - 项目说明
+- [API 文档](/api/docs) - 交互式 API 文档

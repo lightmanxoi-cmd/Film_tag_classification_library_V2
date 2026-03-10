@@ -11,6 +11,10 @@ API v1 蓝图注册模块
     ├── /stats         # stats_bp - 统计数据API
     └── /tasks         # tasks_bp - 任务管理API
 
+API文档：
+    /api/docs          # Swagger UI 文档页面
+    /api/openapi.yaml  # OpenAPI 规范文件
+
 使用示例：
     from web.api.v1 import register_api_v1_blueprints
     
@@ -24,6 +28,7 @@ from web.api.v1.tags import tags_bp
 from web.api.v1.cache import cache_bp
 from web.api.v1.stats import stats_bp
 from web.api.v1.tasks import tasks_bp
+from web.api.docs import docs_bp
 
 api_v1_bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
@@ -34,6 +39,7 @@ def register_api_v1_blueprints(app):
     
     将所有v1版本的子蓝图注册到api_v1_bp，
     然后将api_v1_bp注册到Flask应用。
+    同时注册API文档蓝图。
     
     Args:
         app: Flask应用实例
@@ -42,6 +48,7 @@ def register_api_v1_blueprints(app):
         app = Flask(__name__)
         register_api_v1_blueprints(app)
         # 现在可以访问 /api/v1/videos 等路由
+        # 以及 /api/docs 文档页面
     """
     api_v1_bp.register_blueprint(videos_bp)
     api_v1_bp.register_blueprint(tags_bp)
@@ -50,3 +57,4 @@ def register_api_v1_blueprints(app):
     api_v1_bp.register_blueprint(tasks_bp)
     
     app.register_blueprint(api_v1_bp)
+    app.register_blueprint(docs_bp)

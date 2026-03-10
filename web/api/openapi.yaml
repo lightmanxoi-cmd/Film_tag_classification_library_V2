@@ -1,0 +1,1224 @@
+openapi: 3.0.3
+info:
+  title: 视频标签分类系统 API
+  description: |
+    视频标签分类系统提供视频管理、标签管理、视频流播放等功能。
+    
+    ## 认证方式
+    所有 API 请求需要先登录获取会话，使用 Cookie-based Session 认证。
+    
+    ## 响应格式
+    所有 API 返回统一的 JSON 格式：
+    ```json
+    {
+      "success": true,
+      "message": "操作成功",
+      "data": {...},
+      "cached": false
+    }
+    ```
+    
+    ## 错误处理
+    错误响应格式：
+    ```json
+    {
+      "success": false,
+      "error": "错误信息",
+      "error_code": "ERROR_CODE"
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: 开发服务器
+  - url: http://localhost:5000/api/v1
+    description: API v1 基础路径
+
+tags:
+  - name: 认证
+    description: 用户认证相关接口
+  - name: 视频
+    description: 视频管理相关接口
+  - name: 标签
+    description: 标签管理相关接口
+  - name: 统计
+    description: 系统统计数据接口
+  - name: 缓存
+    description: 缓存管理接口
+  - name: 任务
+    description: 异步任务管理接口
+
+paths:
+  /login:
+    post:
+      tags:
+        - 认证
+      summary: 用户登录
+      description: 使用密码进行登录认证，成功后设置会话 Cookie
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  description: 登录密码
+                  example: "13245768"
+      responses:
+        '302':
+          description: 登录成功，重定向到主页
+        '200':
+          description: 登录失败，返回登录页面
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /logout:
+    get:
+      tags:
+        - 认证
+      summary: 用户登出
+      description: 清除会话并重定向到登录页
+      operationId: logout
+      responses:
+        '302':
+          description: 登出成功，重定向到登录页
+
+  /api/v1/change-password:
+    post:
+      tags:
+        - 认证
+      summary: 修改密码
+      description: 验证原密码并设置新密码
+      operationId: changePassword
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - old_password
+                - new_password
+              properties:
+                old_password:
+                  type: string
+                  description: 原密码
+                new_password:
+                  type: string
+                  description: 新密码（至少6位）
+                  minLength: 6
+            example:
+              old_password: "13245768"
+              new_password: "newpassword123"
+      responses:
+        '200':
+          description: 密码修改成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 密码修改失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/videos:
+    get:
+      tags:
+        - 视频
+      summary: 获取视频列表
+      description: 获取视频列表，支持分页、搜索和随机排序
+      operationId: getVideos
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: search
+          in: query
+          description: 搜索关键词
+          schema:
+            type: string
+        - name: random
+          in: query
+          description: 是否随机排序
+          schema:
+            type: boolean
+            default: true
+        - name: seed
+          in: query
+          description: 随机种子（用于保持随机顺序一致）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功获取视频列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      videos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Video'
+                      total:
+                        type: integer
+                        description: 总记录数
+                      page:
+                        type: integer
+                        description: 当前页码
+                      page_size:
+                        type: integer
+                        description: 每页数量
+                      total_pages:
+                        type: integer
+                        description: 总页数
+                  cached:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/videos/{video_id}:
+    get:
+      tags:
+        - 视频
+      summary: 获取视频详情
+      description: 根据视频ID获取视频详细信息
+      operationId: getVideoDetail
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: video_id
+          in: path
+          required: true
+          description: 视频ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功获取视频详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/VideoDetail'
+                  cached:
+                    type: boolean
+        '404':
+          description: 视频不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/videos/by-tags:
+    post:
+      tags:
+        - 视频
+      summary: 按标签搜索视频
+      description: 根据多个标签搜索视频，支持AND/OR逻辑
+      operationId: getVideosByTags
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tag_ids
+              properties:
+                tag_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: 标签ID列表
+                match_all:
+                  type: boolean
+                  default: false
+                  description: 是否匹配所有标签（AND逻辑），false为OR逻辑
+                page:
+                  type: integer
+                  default: 1
+                page_size:
+                  type: integer
+                  default: 50
+            example:
+              tag_ids: [1, 2, 3]
+              match_all: false
+              page: 1
+              page_size: 50
+      responses:
+        '200':
+          description: 成功获取视频列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      videos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Video'
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      page_size:
+                        type: integer
+                      total_pages:
+                        type: integer
+
+  /api/v1/videos/by-tags-advanced:
+    post:
+      tags:
+        - 视频
+      summary: 高级标签搜索
+      description: |
+        按标签分类进行高级筛选：
+        - 每个分类内的标签使用OR逻辑
+        - 不同分类之间使用AND逻辑
+      operationId: getVideosByTagsAdvanced
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tags_by_category
+              properties:
+                tags_by_category:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: integer
+                  description: 按分类组织的标签字典
+                page:
+                  type: integer
+                  default: 1
+                page_size:
+                  type: integer
+                  default: 50
+                random_order:
+                  type: boolean
+                  default: false
+                random_seed:
+                  type: integer
+                  description: 随机种子
+            example:
+              tags_by_category:
+                类型: [1, 2]
+                地区: [5, 6]
+              page: 1
+              page_size: 50
+              random_order: true
+      responses:
+        '200':
+          description: 成功获取视频列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      videos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Video'
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      page_size:
+                        type: integer
+                      total_pages:
+                        type: integer
+
+  /api/v1/videos/stream/{video_id}:
+    get:
+      tags:
+        - 视频
+      summary: 视频流播放
+      description: |
+        支持HTTP Range请求的视频流接口：
+        - 支持视频拖动播放
+        - ETag缓存支持
+        - 自动识别视频MIME类型
+      operationId: streamVideo
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: video_id
+          in: path
+          required: true
+          description: 视频ID
+          schema:
+            type: integer
+        - name: Range
+          in: header
+          description: HTTP Range请求头
+          schema:
+            type: string
+            example: "bytes=0-1023"
+      responses:
+        '200':
+          description: 完整视频流
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: 部分内容（Range请求）
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: "bytes 0-1023/10240"
+            Accept-Ranges:
+              schema:
+                type: string
+                example: "bytes"
+            ETag:
+              schema:
+                type: string
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: 未修改（ETag匹配）
+        '404':
+          description: 视频文件不存在
+
+  /api/v1/videos/{video_id}/stream-url:
+    get:
+      tags:
+        - 视频
+      summary: 获取视频流URL
+      description: 获取视频流的访问URL
+      operationId: getStreamUrl
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: video_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功获取URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      stream_url:
+                        type: string
+
+  /api/v1/videos/{video_id}/gif:
+    post:
+      tags:
+        - 视频
+      summary: 生成GIF预览
+      description: 为指定视频生成GIF预览图
+      operationId: generateGif
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: video_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                start_time:
+                  type: number
+                  description: 开始时间（秒）
+                  default: 0
+                duration:
+                  type: number
+                  description: GIF时长（秒）
+                  default: 5
+                width:
+                  type: integer
+                  description: GIF宽度
+                  default: 320
+                fps:
+                  type: integer
+                  description: 帧率
+                  default: 10
+      responses:
+        '200':
+          description: GIF生成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      gif_url:
+                        type: string
+        '202':
+          description: GIF生成任务已提交
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      task_id:
+                        type: string
+
+  /api/v1/tags/tree:
+    get:
+      tags:
+        - 标签
+      summary: 获取标签树
+      description: 返回层级结构的标签树，包含每个标签下的视频数量
+      operationId: getTagTree
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取标签树
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TagNode'
+                  cached:
+                    type: boolean
+
+  /api/v1/tags/{tag_id}/videos:
+    get:
+      tags:
+        - 标签
+      summary: 获取标签下的视频
+      description: 返回指定标签下的所有视频，支持分页
+      operationId: getVideosByTag
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: tag_id
+          in: path
+          required: true
+          description: 标签ID
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: 成功获取视频列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      videos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Video'
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      page_size:
+                        type: integer
+                      total_pages:
+                        type: integer
+
+  /api/v1/stats:
+    get:
+      tags:
+        - 统计
+      summary: 获取统计数据
+      description: 返回系统的统计数据，包括视频总数和标签总数
+      operationId: getStats
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取统计数据
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      video_count:
+                        type: integer
+                        description: 视频总数
+                      tag_count:
+                        type: integer
+                        description: 标签总数
+                  cached:
+                    type: boolean
+
+  /api/v1/stats/metrics:
+    get:
+      tags:
+        - 统计
+      summary: 获取性能指标
+      description: 返回系统收集的性能指标数据
+      operationId: getMetrics
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取性能指标
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      summary:
+                        type: object
+                        additionalProperties:
+                          type: object
+                          properties:
+                            count:
+                              type: integer
+                            avg:
+                              type: number
+                            min:
+                              type: number
+                            max:
+                              type: number
+                            last:
+                              type: number
+
+  /api/v1/stats/metrics/clear:
+    post:
+      tags:
+        - 统计
+      summary: 清除性能指标
+      description: 清除所有收集的性能指标数据
+      operationId: clearMetrics
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 清除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/cache/stats:
+    get:
+      tags:
+        - 缓存
+      summary: 获取缓存统计
+      description: 返回查询缓存和缩略图缓存的统计信息
+      operationId: getCacheStats
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取缓存统计
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      query_cache:
+                        type: object
+                        properties:
+                          size:
+                            type: integer
+                          max_size:
+                            type: integer
+                          hits:
+                            type: integer
+                          misses:
+                            type: integer
+                      thumbnail_cache:
+                        type: object
+                        properties:
+                          thumbnails:
+                            type: integer
+                          gifs:
+                            type: integer
+
+  /api/v1/cache/clear:
+    post:
+      tags:
+        - 缓存
+      summary: 清除所有缓存
+      description: 清除查询缓存中的所有条目
+      operationId: clearCache
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 清除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/cache/invalidate/{key_prefix}:
+    post:
+      tags:
+        - 缓存
+      summary: 使指定前缀的缓存失效
+      description: |
+        批量删除指定前缀的所有缓存条目。
+        常用前缀：
+        - videos: 视频相关缓存
+        - tags: 标签相关缓存
+        - stats: 统计数据缓存
+      operationId: invalidateCache
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: key_prefix
+          in: path
+          required: true
+          description: 缓存键前缀
+          schema:
+            type: string
+            enum: [videos, tags, stats]
+      responses:
+        '200':
+          description: 失效成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: 失效的缓存条目数量
+
+  /api/v1/tasks:
+    get:
+      tags:
+        - 任务
+      summary: 获取任务列表
+      description: 获取异步任务列表
+      operationId: listTasks
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: 过滤状态
+          schema:
+            type: string
+            enum: [pending, running, completed, failed, cancelled]
+      responses:
+        '200':
+          description: 成功获取任务列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Task'
+                      total:
+                        type: integer
+
+  /api/v1/tasks/{task_id}:
+    get:
+      tags:
+        - 任务
+      summary: 获取任务详情
+      description: 获取指定任务的详细信息
+      operationId: getTask
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取任务详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Task'
+        '404':
+          description: 任务不存在
+
+  /api/v1/tasks/{task_id}/progress:
+    get:
+      tags:
+        - 任务
+      summary: 获取任务进度
+      description: 获取指定任务的执行进度
+      operationId: getTaskProgress
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功获取进度
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      current:
+                        type: integer
+                        description: 当前进度
+                      total:
+                        type: integer
+                        description: 总数
+                      percentage:
+                        type: number
+                        description: 百分比
+                      message:
+                        type: string
+                        description: 进度消息
+                      processed_count:
+                        type: integer
+                      failed_count:
+                        type: integer
+
+  /api/v1/tasks/{task_id}/result:
+    get:
+      tags:
+        - 任务
+      summary: 获取任务结果
+      description: 获取已完成任务的结果
+      operationId: getTaskResult
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: timeout
+          in: query
+          description: 等待超时时间（秒）
+          schema:
+            type: number
+      responses:
+        '200':
+          description: 成功获取结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      result:
+                        type: object
+                      error:
+                        type: string
+
+  /api/v1/tasks/{task_id}/cancel:
+    post:
+      tags:
+        - 任务
+      summary: 取消任务
+      description: 取消正在执行的任务
+      operationId: cancelTask
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取消成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: 任务已完成，无法取消
+
+  /api/v1/tasks/completed:
+    delete:
+      tags:
+        - 任务
+      summary: 清理已完成任务
+      description: 清理所有已完成的任务记录
+      operationId: clearCompletedTasks
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 清理成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      cleared_count:
+                        type: integer
+
+  /api/v1/tasks/stats:
+    get:
+      tags:
+        - 任务
+      summary: 获取任务统计
+      description: 获取任务管理器的统计信息
+      operationId: getTaskStats
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: 成功获取统计
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      total_tasks:
+                        type: integer
+                      pending:
+                        type: integer
+                      running:
+                        type: integer
+                      completed:
+                        type: integer
+                      failed:
+                        type: integer
+                      cancelled:
+                        type: integer
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+
+  schemas:
+    Video:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 视频ID
+        title:
+          type: string
+          description: 视频标题
+        file_path:
+          type: string
+          description: 文件路径
+        duration:
+          type: number
+          description: 时长（秒）
+          nullable: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        thumbnail:
+          type: string
+          description: 缩略图URL
+          nullable: true
+        gif:
+          type: string
+          description: GIF预览URL
+          nullable: true
+
+    VideoDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        file_path:
+          type: string
+        duration:
+          type: number
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+
+    Tag:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 标签ID
+        name:
+          type: string
+          description: 标签名称
+        parent_id:
+          type: integer
+          description: 父标签ID
+          nullable: true
+
+    TagNode:
+      type: object
+      description: 标签树节点
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parent_id:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        sort_order:
+          type: integer
+        level:
+          type: integer
+        children:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              parent_id:
+                type: integer
+              video_count:
+                type: integer
+                description: 该标签下的视频数量
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 任务ID
+        name:
+          type: string
+          description: 任务名称
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        progress:
+          type: object
+          properties:
+            current:
+              type: integer
+            total:
+              type: integer
+            percentage:
+              type: number
+        error:
+          type: string
+          nullable: true
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "操作成功"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: 错误信息
+        error_code:
+          type: string
+          description: 错误码
+          nullable: true
+        details:
+          type: object
+          nullable: true
+
+  responses:
+    Unauthorized:
+      description: 未授权访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "未授权访问，请先登录"
