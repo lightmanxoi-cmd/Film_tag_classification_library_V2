@@ -37,7 +37,7 @@ Attributes:
 import os
 import time
 import atexit
-from flask import Flask, g
+from flask import Flask, g, request
 
 from video_tag_system.core.database import DatabaseManager
 from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
@@ -308,6 +308,7 @@ def _register_request_hooks(app: Flask):
     设置请求前后的处理逻辑：
     - before_request: 初始化请求上下文、定期清理缓存
     - teardown_request: 清理数据库会话
+    - after_request: 确保ES6模块正确的MIME类型
     
     Args:
         app: Flask应用实例
@@ -333,6 +334,19 @@ def _register_request_hooks(app: Flask):
             cleaned = query_cache.cleanup_expired()
             if cleaned > 0:
                 logger.debug(f"缓存清理: 移除了 {cleaned} 个过期条目")
+    
+    @app.after_request
+    def after_request(response):
+        """
+        请求后处理
+        
+        确保JavaScript文件使用正确的MIME类型，
+        特别是ES6模块需要 application/javascript。
+        """
+        if response.content_type and 'javascript' in response.content_type:
+            if request.path.endswith('.js'):
+                response.content_type = 'application/javascript; charset=utf-8'
+        return response
     
     @app.teardown_request
     def teardown_request(exception=None):
