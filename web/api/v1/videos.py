@@ -572,3 +572,251 @@ def generate_gif_for_video(video_id):
         )
     else:
         return APIResponse.error('GIF生成失败')
+
+
+@videos_bp.route('/batch/thumbnails', methods=['POST'])
+@login_required
+@handle_exceptions
+def batch_generate_thumbnails():
+    """
+    批量异步生成缩略图
+    
+    将缩略图生成任务提交到后台执行，立即返回任务ID。
+    通过任务ID可以查询进度和结果。
+    
+    Request Body:
+        video_ids: 视频ID列表（可选，不提供则处理所有缺少缩略图的视频）
+        force: 是否强制重新生成，默认False
+    
+    Returns:
+        JSON响应，包含任务ID
+    
+    Example:
+        POST /api/v1/videos/batch/thumbnails
+        {
+            "video_ids": [1, 2, 3],
+            "force": false
+        }
+        
+        Response:
+        {
+            "success": true,
+            "message": "任务已提交",
+            "data": {
+                "task_id": "abc123",
+                "total": 3
+            }
+        }
+    """
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    
+    data = request.get_json() or {}
+    video_ids = data.get('video_ids', None)
+    force = data.get('force', False)
+    
+    video_svc, _, _, _ = get_services()
+    thumbnail_gen = get_thumbnail_generator()
+    
+    if video_ids:
+        videos_to_process = []
+        for vid in video_ids:
+            try:
+                video = video_svc.get_video(vid)
+                video_title = video.title or os.path.basename(video.file_path)
+                videos_to_process.append((vid, video.file_path, video_title))
+            except Exception:
+                continue
+    else:
+        result = video_svc.list_videos(page=1, page_size=10000)
+        videos_to_process = [
+            (v.id, v.file_path, v.title or os.path.basename(v.file_path))
+            for v in result.items
+            if force or not thumbnail_gen.has_thumbnail(v.title or os.path.basename(v.file_path))
+        ]
+    
+    if not videos_to_process:
+        return APIResponse.success(message='没有需要处理的视频', data={'task_id': None, 'total': 0})
+    
+    task_id = thumbnail_gen.submit_thumbnail_task(
+        videos=videos_to_process,
+        force=force,
+        task_name=f"批量生成缩略图 ({len(videos_to_process)}个视频)"
+    )
+    
+    return APIResponse.success(
+        message='任务已提交',
+        data={
+            'task_id': task_id,
+            'total': len(videos_to_process)
+        }
+    )
+
+
+@videos_bp.route('/batch/gifs', methods=['POST'])
+@login_required
+@handle_exceptions
+def batch_generate_gifs():
+    """
+    批量异步生成GIF预览
+    
+    将GIF生成任务提交到后台执行，立即返回任务ID。
+    GIF生成比缩略图更耗时，建议使用异步方式。
+    
+    Request Body:
+        video_ids: 视频ID列表（可选，不提供则处理所有缺少GIF的视频）
+        force: 是否强制重新生成，默认False
+    
+    Returns:
+        JSON响应，包含任务ID
+    
+    Example:
+        POST /api/v1/videos/batch/gifs
+        {
+            "video_ids": [1, 2, 3],
+            "force": false
+        }
+        
+        Response:
+        {
+            "success": true,
+            "message": "任务已提交",
+            "data": {
+                "task_id": "abc123",
+                "total": 3
+            }
+        }
+    """
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    
+    data = request.get_json() or {}
+    video_ids = data.get('video_ids', None)
+    force = data.get('force', False)
+    
+    video_svc, _, _, _ = get_services()
+    thumbnail_gen = get_thumbnail_generator()
+    
+    if video_ids:
+        videos_to_process = []
+        for vid in video_ids:
+            try:
+                video = video_svc.get_video(vid)
+                video_title = video.title or os.path.basename(video.file_path)
+                videos_to_process.append((vid, video.file_path, video_title, video.duration))
+            except Exception:
+                continue
+    else:
+        result = video_svc.list_videos(page=1, page_size=10000)
+        videos_to_process = [
+            (v.id, v.file_path, v.title or os.path.basename(v.file_path), v.duration)
+            for v in result.items
+            if force or not thumbnail_gen.has_gif(v.title or os.path.basename(v.file_path))
+        ]
+    
+    if not videos_to_process:
+        return APIResponse.success(message='没有需要处理的视频', data={'task_id': None, 'total': 0})
+    
+    task_id = thumbnail_gen.submit_gif_task(
+        videos=videos_to_process,
+        force=force,
+        task_name=f"批量生成GIF预览 ({len(videos_to_process)}个视频)"
+    )
+    
+    return APIResponse.success(
+        message='任务已提交',
+        data={
+            'task_id': task_id,
+            'total': len(videos_to_process)
+        }
+    )
+
+
+@videos_bp.route('/missing-thumbnails', methods=['GET'])
+@login_required
+@handle_exceptions
+def get_missing_thumbnails():
+    """
+    获取缺少缩略图的视频列表
+    
+    Query Parameters:
+        page: 页码，默认1
+        page_size: 每页数量，默认50
+    
+    Returns:
+        JSON响应，包含缺少缩略图的视频列表
+    
+    Example:
+        GET /api/v1/videos/missing-thumbnails?page=1&page_size=20
+    """
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 50, type=int)
+    
+    video_svc, _, _, _ = get_services()
+    thumbnail_gen = get_thumbnail_generator()
+    
+    result = video_svc.list_videos(page=page, page_size=page_size)
+    
+    missing_videos = []
+    for v in result.items:
+        video_title = v.title or os.path.basename(v.file_path)
+        if not thumbnail_gen.has_thumbnail(video_title):
+            missing_videos.append({
+                'id': v.id,
+                'title': video_title,
+                'file_path': v.file_path,
+                'duration': v.duration
+            })
+    
+    return APIResponse.success(data={
+        'videos': missing_videos,
+        'total': len(missing_videos),
+        'page': page,
+        'page_size': page_size
+    })
+
+
+@videos_bp.route('/missing-gifs', methods=['GET'])
+@login_required
+@handle_exceptions
+def get_missing_gifs():
+    """
+    获取缺少GIF预览的视频列表
+    
+    Query Parameters:
+        page: 页码，默认1
+        page_size: 每页数量，默认50
+    
+    Returns:
+        JSON响应，包含缺少GIF的视频列表
+    
+    Example:
+        GET /api/v1/videos/missing-gifs?page=1&page_size=20
+    """
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 50, type=int)
+    
+    video_svc, _, _, _ = get_services()
+    thumbnail_gen = get_thumbnail_generator()
+    
+    result = video_svc.list_videos(page=page, page_size=page_size)
+    
+    missing_videos = []
+    for v in result.items:
+        video_title = v.title or os.path.basename(v.file_path)
+        if not thumbnail_gen.has_gif(video_title):
+            missing_videos.append({
+                'id': v.id,
+                'title': video_title,
+                'file_path': v.file_path,
+                'duration': v.duration
+            })
+    
+    return APIResponse.success(data={
+        'videos': missing_videos,
+        'total': len(missing_videos),
+        'page': page,
+        'page_size': page_size
+    })

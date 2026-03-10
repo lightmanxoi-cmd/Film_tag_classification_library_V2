@@ -1,7 +1,7 @@
 """
 工具模块
 
-提供系统通用的工具函数和类，包括缓存、验证、辅助函数、缩略图生成、日志等。
+提供系统通用的工具函数和类，包括缓存、验证、辅助函数、缩略图生成、日志、异步任务等。
 
 子模块：
     - cache: 查询缓存模块，支持LRU淘汰策略
@@ -9,6 +9,7 @@
     - helpers: 辅助工具函数，如格式化、哈希计算等
     - thumbnail_generator: 视频缩略图和GIF生成器
     - logger: 统一日志系统，支持结构化日志和性能监控
+    - async_tasks: 异步任务管理器，支持后台任务和进度追踪
 
 主要导出：
     验证函数：
@@ -28,9 +29,13 @@
         - console: 控制台输出器
         - metrics: 性能指标收集器
         - timed: 性能计时装饰器
+    
+    异步任务：
+        - get_task_manager: 获取任务管理器
+        - init_task_manager: 初始化任务管理器
 
 使用示例：
-    from video_tag_system.utils import validate_file_path, format_file_size, get_logger
+    from video_tag_system.utils import validate_file_path, format_file_size, get_logger, get_task_manager
     
     # 验证文件路径
     path = validate_file_path("/path/to/video.mp4")
@@ -41,6 +46,10 @@
     # 使用日志
     logger = get_logger(__name__)
     logger.info("操作完成")
+    
+    # 提交异步任务
+    manager = get_task_manager()
+    task_id = manager.submit(func=my_task, task_name="我的任务")
 
 模块设计原则：
     1. 单一职责：每个子模块专注于特定功能
@@ -66,6 +75,10 @@ from video_tag_system.utils.logger import (
     metrics,
     timed,
 )
+from video_tag_system.utils.async_tasks import (
+    get_task_manager,
+    init_task_manager,
+)
 
 __all__ = [
     "validate_file_path",
@@ -80,4 +93,6 @@ __all__ = [
     "console",
     "metrics",
     "timed",
+    "get_task_manager",
+    "init_task_manager",
 ]

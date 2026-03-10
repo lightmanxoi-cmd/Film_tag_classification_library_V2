@@ -2,7 +2,7 @@
 Flask应用工厂模块
 
 使用应用工厂模式创建Flask应用实例，支持多环境配置。
-提供数据库管理、缓存清理、请求钩子等功能。
+提供数据库管理、缓存清理、请求钩子、异步任务管理等功能。
 
 主要功能：
     - create_app: 应用工厂函数，创建并配置Flask应用
@@ -14,6 +14,7 @@ Flask应用工厂模块
     - 蓝图注册：API、页面、认证模块
     - 请求钩子：数据库会话管理、缓存清理
     - 错误处理：统一异常处理
+    - 异步任务：后台任务管理器
 
 使用示例：
     # 创建应用
@@ -42,6 +43,7 @@ from video_tag_system.core.database import DatabaseManager
 from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
 from video_tag_system.utils.cache import query_cache
 from video_tag_system.utils.logger import get_logger, setup_logging, set_request_id, clear_request_id
+from video_tag_system.utils.async_tasks import init_task_manager, get_task_manager
 
 logger = get_logger(__name__)
 
@@ -357,7 +359,7 @@ def _init_database(app: Flask):
     初始化数据库
     
     创建数据库管理器实例，确保表结构存在。
-    同时初始化每日备份调度器。
+    同时初始化每日备份调度器和异步任务管理器。
     
     Args:
         app: Flask应用实例
@@ -369,13 +371,19 @@ def _init_database(app: Flask):
         logger.info("备份调度器初始化完成")
     except Exception as e:
         logger.warning(f"备份调度器初始化失败: {e}")
+    
+    try:
+        init_task_manager(max_workers=4, task_timeout=3600)
+        logger.info("异步任务管理器初始化完成")
+    except Exception as e:
+        logger.warning(f"异步任务管理器初始化失败: {e}")
 
 
 def _register_cleanup(app: Flask):
     """
     注册清理函数
     
-    应用退出时清理缓存、停止备份调度器等资源。
+    应用退出时清理缓存、停止备份调度器、关闭任务管理器等资源。
     
     Args:
         app: Flask应用实例
@@ -388,6 +396,13 @@ def _register_cleanup(app: Flask):
             logger.info("备份调度器已停止")
         except Exception as e:
             logger.warning(f"停止备份调度器失败: {e}")
+        
+        try:
+            task_mgr = get_task_manager()
+            task_mgr.shutdown(wait=False)
+            logger.info("异步任务管理器已关闭")
+        except Exception as e:
+            logger.warning(f"关闭异步任务管理器失败: {e}")
         
         try:
             query_cache.clear()

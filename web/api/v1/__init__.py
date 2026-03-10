@@ -8,7 +8,8 @@ API v1 蓝图注册模块
     ├── /videos        # videos_bp - 视频相关API
     ├── /tags          # tags_bp - 标签相关API
     ├── /cache         # cache_bp - 缓存管理API
-    └── /stats         # stats_bp - 统计数据API
+    ├── /stats         # stats_bp - 统计数据API
+    └── /tasks         # tasks_bp - 任务管理API
 
 使用示例：
     from web.api.v1 import register_api_v1_blueprints
@@ -22,6 +23,7 @@ from web.api.v1.videos import videos_bp
 from web.api.v1.tags import tags_bp
 from web.api.v1.cache import cache_bp
 from web.api.v1.stats import stats_bp
+from web.api.v1.tasks import tasks_bp
 
 api_v1_bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
@@ -45,5 +47,6 @@ def register_api_v1_blueprints(app):
     api_v1_bp.register_blueprint(tags_bp)
     api_v1_bp.register_blueprint(cache_bp)
     api_v1_bp.register_blueprint(stats_bp)
+    api_v1_bp.register_blueprint(tasks_bp)
     
     app.register_blueprint(api_v1_bp)

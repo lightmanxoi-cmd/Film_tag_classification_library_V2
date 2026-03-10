@@ -895,6 +895,125 @@ class ThumbnailGenerator:
             Dict: 缓存统计信息
         """
         return self._memory_cache.get_stats()
+    
+    def submit_thumbnail_task(
+        self,
+        videos: List[Tuple[int, str, str]],
+        force: bool = False,
+        task_name: str = "批量生成缩略图"
+    ) -> str:
+        """
+        异步提交缩略图生成任务
+        
+        将批量缩略图生成任务提交到后台执行，立即返回任务ID。
+        通过任务ID可以查询进度和结果。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title)元组
+            force: 是否强制重新生成，默认False
+            task_name: 任务名称
+        
+        Returns:
+            str: 任务ID，用于查询进度和结果
+        
+        Example:
+            videos = [(1, "/path/video.mp4", "标题")]
+            task_id = generator.submit_thumbnail_task(videos)
+            
+            # 查询进度
+            from video_tag_system.utils.async_tasks import get_task_manager
+            manager = get_task_manager()
+            progress = manager.get_progress(task_id)
+        """
+        from video_tag_system.utils.async_tasks import get_task_manager
+        
+        def process_thumbnail(item, **kwargs):
+            video_id, file_path, title = item
+            force_flag = kwargs.get('force', False)
+            
+            if not title:
+                return False
+            
+            if not force_flag and self.has_thumbnail(title):
+                return True
+            
+            result = self.generate_thumbnail_safe(file_path, title)
+            return result is not None
+        
+        valid_videos = [
+            (vid, path, title) for vid, path, title in videos
+            if title
+        ]
+        
+        if not valid_videos:
+            return None
+        
+        manager = get_task_manager()
+        task_id = manager.submit_batch(
+            func=process_thumbnail,
+            items=valid_videos,
+            task_name=task_name,
+            force=force
+        )
+        
+        return task_id
+    
+    def submit_gif_task(
+        self,
+        videos: List[Tuple[int, str, str, Optional[int]]],
+        force: bool = False,
+        task_name: str = "批量生成GIF预览"
+    ) -> str:
+        """
+        异步提交GIF生成任务
+        
+        将批量GIF生成任务提交到后台执行，立即返回任务ID。
+        GIF生成比缩略图更耗时，建议使用异步方式。
+        
+        Args:
+            videos: 视频列表，每个元素为(video_id, file_path, title, duration)元组
+            force: 是否强制重新生成，默认False
+            task_name: 任务名称
+        
+        Returns:
+            str: 任务ID，用于查询进度和结果
+        
+        Example:
+            videos = [(1, "/path/video.mp4", "标题", 3600)]
+            task_id = generator.submit_gif_task(videos)
+        """
+        from video_tag_system.utils.async_tasks import get_task_manager
+        
+        def process_gif(item, **kwargs):
+            video_id, file_path, title, duration = item
+            force_flag = kwargs.get('force', False)
+            
+            if not title:
+                return False
+            
+            if not force_flag and self.has_gif(title):
+                return True
+            
+            result = self.generate_gif(file_path, title, duration)
+            return result is not None
+        
+        valid_videos = [
+            (vid, path, title, dur) for vid, path, title, dur in videos
+            if title
+        ]
+        
+        if not valid_videos:
+            return None
+        
+        manager = get_task_manager()
+        task_id = manager.submit_batch(
+            func=process_gif,
+            items=valid_videos,
+            task_name=task_name,
+            force=force
+        )
+        
+        return task_id
 
 
 thumbnail_generator = ThumbnailGenerator()
