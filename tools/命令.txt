@@ -1,6 +1,4 @@
-python tag_manager.py create "3D" --parent-name "演员"
-python video_importer.py --interactive
-
+_666
 cd E:\BaiduSyncdisk\Program20260115\Film_tag_classification_library_V2
 
 python tools/tag_manager.py create "典藏"

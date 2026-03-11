@@ -65,11 +65,15 @@ function createVideoCard(video, isMobile) {
 }
 
 function createThumbnailHtml(video, ext, formatClass, isMobile) {
-    if (isMobile && video.gif) {
+    // 对URL进行编码，处理特殊字符如 #
+    const encodedGif = video.gif ? encodeURI(video.gif) : null;
+    const encodedThumbnail = video.thumbnail ? encodeURI(video.thumbnail) : null;
+    
+    if (isMobile && encodedGif) {
         return `
             <div class="thumbnail gif-mode ${formatClass}">
                 <img class="gif-preview-mobile lazy-loading" 
-                     data-src="${video.gif}" 
+                     data-src="${encodedGif}" 
                      alt="${video.title}"
                      loading="lazy">
                 <span class="play-overlay">▶</span>
@@ -78,16 +82,16 @@ function createThumbnailHtml(video, ext, formatClass, isMobile) {
         `;
     }
     
-    const thumbnailClass = video.thumbnail ? 'thumbnail lazy-loading' : 'thumbnail';
-    const thumbnailDataAttr = video.thumbnail ? 
-        `data-bg-image="url('${video.thumbnail}')"` : '';
+    const thumbnailClass = encodedThumbnail ? 'thumbnail lazy-loading' : 'thumbnail';
+    const thumbnailDataAttr = encodedThumbnail ? 
+        `data-bg-image="url('${encodedThumbnail}')"` : '';
     
-    const gifElement = video.gif ? 
-        `<img class="gif-preview lazy-loading" data-src="${video.gif}" alt="${video.title}" style="display: none;">` : '';
+    const gifElement = encodedGif ? 
+        `<img class="gif-preview lazy-loading" data-src="${encodedGif}" alt="${video.title}" style="display: none;">` : '';
     
     return `
         <div class="${thumbnailClass} ${formatClass}" ${thumbnailDataAttr}>
-            ${!video.thumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
+            ${!encodedThumbnail ? '<span class="play-icon">▶</span>' : '<span class="play-overlay">▶</span>'}
             <span class="format-badge">${ext.toUpperCase()}</span>
             ${gifElement}
         </div>
@@ -97,6 +101,8 @@ function createThumbnailHtml(video, ext, formatClass, isMobile) {
 function setupGifHover(card, video) {
     const thumbnailDiv = card.querySelector('.thumbnail');
     const gifImg = card.querySelector('.gif-preview');
+    // 对缩略图URL进行编码
+    const encodedThumbnail = video.thumbnail ? encodeURI(video.thumbnail) : null;
     
     card.addEventListener('mouseenter', () => {
         thumbnailDiv.style.backgroundImage = 'none';
@@ -111,8 +117,8 @@ function setupGifHover(card, video) {
     
     card.addEventListener('mouseleave', () => {
         gifImg.style.display = 'none';
-        if (video.thumbnail) {
-            thumbnailDiv.style.backgroundImage = `url('${video.thumbnail}')`;
+        if (encodedThumbnail) {
+            thumbnailDiv.style.backgroundImage = `url('${encodedThumbnail}')`;
         }
     });
 }

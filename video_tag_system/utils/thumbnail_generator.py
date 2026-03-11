@@ -331,6 +331,7 @@ class ThumbnailGenerator:
         清理标题为安全的文件名
         
         移除文件名中的非法字符，转换为适合作为文件名的格式。
+        同时处理URL特殊字符，避免URL解析问题。
         
         Args:
             title: 原始标题
@@ -344,7 +345,8 @@ class ThumbnailGenerator:
         """
         if not title:
             return ""
-        safe_title = re.sub(r'[<>:"/\\|?*]', '_', title)
+        # 包括Windows非法字符和URL特殊字符 (# 用于URL锚点，% 用于URL编码)
+        safe_title = re.sub(r'[<>:"/\\|?*#%]', '_', title)
         safe_title = re.sub(r'\s+', '_', safe_title)
         safe_title = safe_title.strip('._')
         return safe_title
