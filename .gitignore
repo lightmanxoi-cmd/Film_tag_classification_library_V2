@@ -76,3 +76,4 @@ video_library.db-shm
 video_library.db-wal
 backups/.backup_state.json
 tools/命令.txt
+backups/.backup_state.json
