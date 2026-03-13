@@ -859,4 +859,6 @@ function goBack() {
 /**
  * 页面加载完成后初始化
  */
-document.addEventListener('DOMContentLoaded', loadVideos);
+document.addEventListener('DOMContentLoaded', () => {
+    loadVideos();
+});
