@@ -203,7 +203,7 @@ async function loadVideos() {
     filterParams = getUrlParams();
     
     if (!filterParams) {
-        alert('No filter parameters found');
+        alert('未找到筛选参数');
         window.location.href = '/';
         return;
     }
@@ -237,7 +237,7 @@ async function loadVideosFromServer(autoPlay = true) {
         
         if (result.success && result.data.videos.length > 0) {
             videos = result.data.videos;
-            videoCount.textContent = `${videos.length} videos`;
+            videoCount.textContent = `${videos.length} 个视频`;
             currentPlayIndex = 0;
             
             if (loadingScreen.style.display !== 'none') {
@@ -252,15 +252,15 @@ async function loadVideosFromServer(autoPlay = true) {
             }
         } else {
             loadingScreen.innerHTML = `
-                <p>No videos found</p>
-                <button onclick="goBack()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">Back</button>
+                <p>未找到视频</p>
+                <button onclick="goBack()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">返回</button>
             `;
         }
     } catch (error) {
         console.error('Failed to load videos:', error);
         loadingScreen.innerHTML = `
-            <p>Failed to load videos</p>
-            <button onclick="goBack()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">Back</button>
+            <p>加载视频失败</p>
+            <button onclick="goBack()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">返回</button>
         `;
     }
 }
@@ -669,7 +669,7 @@ function toggleClock() {
 function toggleVideoFitMode() {
     videoFitMode = videoFitMode === 'cover' ? 'contain' : 'cover';
     video.className = `video-player video-fit-${videoFitMode}`;
-    fitModeBtn.querySelector('span').textContent = videoFitMode === 'cover' ? 'Cover' : 'Contain';
+    fitModeBtn.querySelector('span').textContent = videoFitMode === 'cover' ? '覆盖' : '适应';
 }
 
 /**
