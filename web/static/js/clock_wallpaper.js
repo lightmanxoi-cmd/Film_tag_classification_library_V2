@@ -839,6 +839,42 @@ function startClock() {
     setInterval(updateClock, 1000);
 }
 
+/* ==================== 会话保活 ==================== */
+
+/**
+ * 会话保活定时器
+ * 每分钟向服务器发送请求，保持session活跃
+ */
+let sessionKeepAliveInterval = null;
+
+function startSessionKeepAlive() {
+    if (sessionKeepAliveInterval) return;
+    
+    sessionKeepAliveInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/v1/stats', {
+                credentials: 'include'
+            });
+            if (response.status === 401) {
+                console.log('[Session] 会话已过期，停止保活');
+                stopSessionKeepAlive();
+            }
+        } catch (e) {
+            console.log('[Session] 保活请求失败:', e.message);
+        }
+    }, 60000);
+    
+    console.log('[Session] 会话保活已启动');
+}
+
+function stopSessionKeepAlive() {
+    if (sessionKeepAliveInterval) {
+        clearInterval(sessionKeepAliveInterval);
+        sessionKeepAliveInterval = null;
+        console.log('[Session] 会话保活已停止');
+    }
+}
+
 /**
  * 返回上一页
  * 
@@ -851,6 +887,7 @@ function goBack() {
     if (controlsTimeout) {
         clearTimeout(controlsTimeout);
     }
+    stopSessionKeepAlive();
     window.location.href = '/';
 }
 
@@ -861,4 +898,5 @@ function goBack() {
  */
 document.addEventListener('DOMContentLoaded', () => {
     loadVideos();
+    startSessionKeepAlive();
 });
