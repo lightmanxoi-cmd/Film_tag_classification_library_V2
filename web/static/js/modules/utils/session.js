@@ -2,7 +2,7 @@
  * 会话管理模块
  */
 
-const SESSION_TIMEOUT = 10 * 60 * 1000;
+const SESSION_TIMEOUT = 3 * 60 * 60 * 1000;
 const WARNING_THRESHOLD = 60000;
 const DANGER_THRESHOLD = 180000;
 

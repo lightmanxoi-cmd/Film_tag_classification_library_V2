@@ -192,6 +192,37 @@ class VideoImporterCLI:
                     video_files.append(filepath)
         
         return sorted(video_files)
+
+    def _scan_666_video_files(self, folder_path: str, recursive: bool = False) -> List[str]:
+        """
+        扫描文件夹中以_666结尾的视频文件
+        
+        Args:
+            folder_path: 文件夹路径
+            recursive: 是否递归扫描子文件夹
+            
+        Returns:
+            以_666结尾的视频文件路径列表
+        """
+        video_files = []
+        
+        if not os.path.isdir(folder_path):
+            return video_files
+        
+        if recursive:
+            for root, dirs, files in os.walk(folder_path):
+                for filename in files:
+                    if self._is_video_file(filename) and filename.rsplit('.', 1)[0].endswith('_666'):
+                        video_files.append(os.path.join(root, filename))
+        else:
+            for filename in os.listdir(folder_path):
+                filepath = os.path.join(folder_path, filename)
+                if os.path.isfile(filepath) and self._is_video_file(filename):
+                    name_without_ext = os.path.splitext(filename)[0]
+                    if name_without_ext.endswith('_666'):
+                        video_files.append(filepath)
+        
+        return sorted(video_files)
     
     def import_video(
         self,
@@ -350,7 +381,69 @@ class VideoImporterCLI:
         print(f"  - 失败: {failed_count} 个")
         print(f"  - 总计: {len(video_files)} 个")
         print("="*60)
-    
+
+    def import_five_star_videos(
+        self,
+        folder_path: str,
+        recursive: bool = False
+    ) -> None:
+        """
+        批量导入以_666结尾的五星评级视频
+
+        自动为这些视频添加一级标签"评级"和二级标签"五星"。
+        如果视频已在库中，只添加标签；如果不在库中，先入库再添加标签。
+
+        Args:
+            folder_path: 文件夹路径
+            recursive: 是否递归扫描子文件夹
+        """
+        if not os.path.isdir(folder_path):
+            print(f"✗ 错误: 文件夹不存在 '{folder_path}'")
+            return
+
+        video_files = self._scan_666_video_files(folder_path, recursive)
+
+        if not video_files:
+            print(f"✗ 在文件夹 '{folder_path}' 中未找到以_666结尾的视频文件")
+            return
+
+        print(f"\n在文件夹 '{folder_path}' 中找到 {len(video_files)} 个以_666结尾的视频文件")
+        print(f"递归扫描: {'是' if recursive else '否'}")
+        print(f"将自动添加标签: 评级 > 五星")
+        print("\n文件列表:")
+        for i, vf in enumerate(video_files, 1):
+            print(f"  {i}. {os.path.basename(vf)}")
+
+        confirm = input("\n确认导入并添加标签? (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("操作已取消")
+            return
+
+        print("\n开始批量导入...\n")
+
+        success_count = 0
+        failed_count = 0
+        skipped_count = 0
+
+        for i, video_file in enumerate(video_files, 1):
+            print(f"[{i}/{len(video_files)}] 处理: {os.path.basename(video_file)}")
+            try:
+                if self.import_video(video_file, "评级", "五星"):
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                print(f"✗ 导入失败: {e}")
+                failed_count += 1
+            print()
+
+        print("="*60)
+        print(f"五星视频批量导入完成!")
+        print(f"  - 成功: {success_count} 个")
+        print(f"  - 失败: {failed_count} 个")
+        print(f"  - 总计: {len(video_files)} 个")
+        print("="*60)
+
     def interactive_import(self) -> None:
         """
         交互式导入视频
@@ -384,15 +477,16 @@ class VideoImporterCLI:
                 print("请选择导入模式:")
                 print("  1. 单个文件导入")
                 print("  2. 文件夹批量导入")
+                print("  3. 五星视频_666录入")
                 print("  q. 退出")
 
-                mode = input("\n请输入选项 (1/2/q): ").strip().lower()
+                mode = input("\n请输入选项 (1/2/3/q): ").strip().lower()
 
                 if mode == 'q':
                     print("\n退出程序")
                     break
 
-                if mode not in ['1', '2']:
+                if mode not in ['1', '2', '3']:
                     print("✗ 错误: 无效的选项\n")
                     continue
 
@@ -420,7 +514,7 @@ class VideoImporterCLI:
                         continue
 
                     file_paths = valid_files
-                else:
+                elif mode == '2':
                     folder_path = input("请输入文件夹路径: ").strip()
                     folder_path = self._strip_quotes(folder_path)
 
@@ -436,6 +530,25 @@ class VideoImporterCLI:
                     recursive = recursive_input == 'y'
 
                     file_path = folder_path
+
+                if mode == '3':
+                    folder_path = input("请输入文件夹路径: ").strip()
+                    folder_path = self._strip_quotes(folder_path)
+
+                    if not folder_path:
+                        print("✗ 错误: 文件夹路径不能为空\n")
+                        continue
+
+                    if not os.path.isdir(folder_path):
+                        print(f"✗ 错误: 文件夹不存在 '{folder_path}'\n")
+                        continue
+
+                    recursive_input = input("是否递归扫描子文件夹? (y/n, 默认n): ").strip().lower()
+                    recursive = recursive_input == 'y'
+
+                    self.import_five_star_videos(folder_path, recursive)
+                    print()
+                    continue
 
                 while True:
                     print("\n" + "-"*40)
