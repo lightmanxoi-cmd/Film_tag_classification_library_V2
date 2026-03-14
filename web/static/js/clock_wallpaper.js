@@ -10,7 +10,7 @@
  * 
  * 主要功能模块：
  * 1. 视频加载模块：loadVideos、initShuffledIndices
- * 2. 播放控制模块：playRandomVideo、togglePlay、toggleMute
+ * 2. 播放控制模块：playNextVideo、togglePlay、toggleMute
  * 3. 分段播放模块：startSegmentPlayback、toggleBrowseMode
  * 4. UI控制模块：toggleFullscreen、toggleClock、toggleVideoFitMode
  * 5. 时钟显示模块：startClock
@@ -24,11 +24,11 @@
 /** 视频列表数据 */
 let videos = [];
 
-/** 随机打乱后的视频索引数组 */
-let shuffledIndices = [];
+/** 筛选参数（用于重新加载视频） */
+let filterParams = null;
 
-/** 当前随机播放的索引位置 */
-let currentShuffleIndex = 0;
+/** 当前播放索引 */
+let currentPlayIndex = 0;
 
 /** 当前播放的视频在原数组中的索引 */
 let currentVideoIndex = -1;
@@ -196,18 +196,27 @@ function getUrlParams() {
 /**
  * 加载视频列表
  * 
- * 根据URL参数中的标签筛选条件，从服务器获取视频列表。
- * 加载成功后初始化随机播放索引并开始播放第一个视频。
+ * 根据URL参数中的标签筛选条件，从服务器获取随机排序的视频列表。
+ * 服务器返回的列表已经是随机顺序，直接按顺序播放即可。
  */
 async function loadVideos() {
-    const tagsByCategory = getUrlParams();
+    filterParams = getUrlParams();
     
-    if (!tagsByCategory) {
+    if (!filterParams) {
         alert('No filter parameters found');
         window.location.href = '/';
         return;
     }
     
+    await loadVideosFromServer();
+}
+
+/**
+ * 从服务器加载视频列表
+ * 
+ * @param {boolean} autoPlay - 是否自动开始播放
+ */
+async function loadVideosFromServer(autoPlay = true) {
     try {
         const randomSeed = Date.now();
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
@@ -216,9 +225,9 @@ async function loadVideos() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                tags_by_category: tagsByCategory,
+                tags_by_category: filterParams,
                 page: 1,
-                page_size: 1000,
+                page_size: 10000,
                 random_order: true,
                 random_seed: randomSeed
             })
@@ -229,15 +238,18 @@ async function loadVideos() {
         if (result.success && result.data.videos.length > 0) {
             videos = result.data.videos;
             videoCount.textContent = `${videos.length} videos`;
+            currentPlayIndex = 0;
             
-            initShuffledIndices();
+            if (loadingScreen.style.display !== 'none') {
+                loadingScreen.style.display = 'none';
+                playerContainer.style.display = 'block';
+                startClock();
+                setupEventListeners();
+            }
             
-            loadingScreen.style.display = 'none';
-            playerContainer.style.display = 'block';
-            
-            playRandomVideo();
-            startClock();
-            setupEventListeners();
+            if (autoPlay) {
+                playNextVideo();
+            }
         } else {
             loadingScreen.innerHTML = `
                 <p>No videos found</p>
@@ -254,31 +266,19 @@ async function loadVideos() {
 }
 
 /**
- * 初始化随机播放索引
+ * 播放下一个视频
  * 
- * 创建视频索引数组并使用 Fisher-Yates 算法进行随机打乱，
- * 确保每个视频只播放一次后再重新打乱。
+ * 按顺序播放视频列表中的下一个。
+ * 如果所有视频都已播放，则重新从服务器获取新的随机列表。
  */
-function initShuffledIndices() {
-    shuffledIndices = [];
-    for (let i = 0; i < videos.length; i++) {
-        shuffledIndices.push(i);
-    }
-    for (let i = shuffledIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
-    }
-    currentShuffleIndex = 0;
-}
-
-/**
- * 播放随机视频
- * 
- * 从随机打乱的索引数组中获取下一个视频并开始播放。
- * 如果所有视频都已播放，则重新打乱索引数组。
- */
-function playRandomVideo() {
+function playNextVideo() {
     if (videos.length === 0) return;
+    
+    if (currentPlayIndex >= videos.length) {
+        console.log('[ClockWallpaper] 播放列表完成，重新加载随机列表');
+        loadVideosFromServer();
+        return;
+    }
     
     isSwitchingVideo = true;
     showControls = false;
@@ -290,15 +290,10 @@ function playRandomVideo() {
     
     currentSegment = 0;
     
-    if (currentShuffleIndex >= shuffledIndices.length) {
-        initShuffledIndices();
-    }
+    const videoData = videos[currentPlayIndex];
+    currentVideoIndex = currentPlayIndex;
+    currentPlayIndex++;
     
-    const randomIndex = shuffledIndices[currentShuffleIndex];
-    currentShuffleIndex++;
-    currentVideoIndex = randomIndex;
-    
-    const videoData = videos[randomIndex];
     video.src = `/video/stream/${videoData.id}`;
     videoName.textContent = videoData.title;
     
@@ -336,7 +331,7 @@ function startSegmentPlayback(videoDuration) {
     
     const playNextSegment = () => {
         if (currentSeg >= 10) {
-            playRandomVideo();
+            playNextVideo();
             return;
         }
         
@@ -411,12 +406,12 @@ function setupEventListeners() {
         
         if (browseMode) {
             if (video.duration <= 60) {
-                playRandomVideo();
+                playNextVideo();
             }
             return;
         }
         
-        playRandomVideo();
+        playNextVideo();
     });
     
     video.addEventListener('error', (e) => {
@@ -425,14 +420,14 @@ function setupEventListeners() {
             clearTimeout(segmentTimeout);
         }
         setTimeout(() => {
-            playRandomVideo();
+            playNextVideo();
         }, 1000);
     });
     
     video.addEventListener('click', handleVideoClick);
     
     playBtn.addEventListener('click', togglePlay);
-    skipBtn.addEventListener('click', playRandomVideo);
+    skipBtn.addEventListener('click', playNextVideo);
     volumeBtn.addEventListener('click', toggleMute);
     volumeSlider.addEventListener('input', handleVolumeChange);
     fullscreenBtn.addEventListener('click', toggleFullscreen);
@@ -475,7 +470,7 @@ function handleTouchEnd(e) {
     
     if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50 && touchDuration < 500) {
         if (diffX < 0) {
-            playRandomVideo();
+            playNextVideo();
         }
     }
 }

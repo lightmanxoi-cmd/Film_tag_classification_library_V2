@@ -3,15 +3,16 @@
  * 
  * 本文件实现了一个四分屏同时播放的视频播放器，具有以下特点：
  * - 同时播放四个视频，每个视频独立控制
- * - 支持随机播放，避免四个播放器播放同一视频
+ * - 支持将筛选结果均分给四个播放器
  * - 支持单独控制每个播放器的播放、暂停、音量
  * - 支持全局静音切换
  * - 支持时钟叠加显示
  * - 自动隐藏控制栏
+ * - 任意播放器播放完毕后重新加载随机列表并重新分配
  * 
  * 主要功能模块：
- * 1. 视频加载模块：loadVideos、initAllShuffledIndices、initPlayers
- * 2. 播放控制模块：playNextVideo、togglePlay、getNextAvailableIndex
+ * 1. 视频加载模块：loadVideos、loadVideosFromServer、distributeVideos
+ * 2. 播放控制模块：playNextVideo、togglePlay
  * 3. 音量控制模块：setVolume、toggleMute、toggleAllMute
  * 4. 进度控制模块：seekVideo、updateTimeDisplay
  * 5. 时钟显示模块：startClock、toggleClockDisplay
@@ -25,14 +26,17 @@
 /** 视频列表数据 */
 let videos = [];
 
+/** 筛选参数（用于重新加载视频） */
+let filterParams = null;
+
 /** 四个播放器实例数组 */
 let players = [];
 
-/** 每个播放器独立的随机打乱后的视频索引数组（二维数组） */
-let shuffledIndicesArray = [[], [], [], []];
+/** 每个播放器分配的视频列表 */
+let playerVideoLists = [[], [], [], []];
 
-/** 每个播放器当前的随机索引位置 */
-let currentIndices = [0, 0, 0, 0];
+/** 每个播放器当前的播放索引 */
+let currentPlayIndices = [0, 0, 0, 0];
 
 /** 每个播放器当前播放的视频ID */
 let currentVideoIds = [-1, -1, -1, -1];
@@ -122,18 +126,27 @@ function getUrlParams() {
 /**
  * 加载视频列表
  * 
- * 根据URL参数中的标签筛选条件，从服务器获取视频列表。
- * 加载成功后初始化四个播放器并开始播放。
+ * 根据URL参数中的标签筛选条件，从服务器获取随机排序的视频列表。
+ * 服务器返回的列表已经是随机顺序，然后均分给四个播放器。
  */
 async function loadVideos() {
-    const tagsByCategory = getUrlParams();
+    filterParams = getUrlParams();
     
-    if (!tagsByCategory) {
+    if (!filterParams) {
         alert('No filter parameters found');
         window.location.href = '/';
         return;
     }
     
+    await loadVideosFromServer();
+}
+
+/**
+ * 从服务器加载视频列表
+ * 
+ * @param {boolean} autoPlay - 是否自动开始播放
+ */
+async function loadVideosFromServer(autoPlay = true) {
     try {
         const randomSeed = Date.now();
         const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
@@ -142,9 +155,9 @@ async function loadVideos() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                tags_by_category: tagsByCategory,
+                tags_by_category: filterParams,
                 page: 1,
-                page_size: 1000,
+                page_size: 10000,
                 random_order: true,
                 random_seed: randomSeed
             })
@@ -152,32 +165,23 @@ async function loadVideos() {
         
         const result = await response.json();
         
-        if (result.success && result.data.videos.length >= 4) {
+        if (result.success && result.data.videos.length > 0) {
             videos = result.data.videos;
             videoCount.textContent = `${videos.length} videos`;
             
-            initAllShuffledIndices();
-            initPlayers();
+            distributeVideos();
             
-            loadingScreen.style.display = 'none';
-            multiPlayerContainer.style.display = 'block';
+            if (loadingScreen.style.display !== 'none') {
+                loadingScreen.style.display = 'none';
+                multiPlayerContainer.style.display = 'block';
+                initPlayers();
+                startClock();
+                setupEventListeners();
+            }
             
-            startAllPlayers();
-            startClock();
-            setupEventListeners();
-        } else if (result.success && result.data.videos.length > 0) {
-            videos = result.data.videos;
-            videoCount.textContent = `${videos.length} videos`;
-            
-            initAllShuffledIndices();
-            initPlayers();
-            
-            loadingScreen.style.display = 'none';
-            multiPlayerContainer.style.display = 'block';
-            
-            startAllPlayers();
-            startClock();
-            setupEventListeners();
+            if (autoPlay) {
+                startAllPlayers();
+            }
         } else {
             loadingScreen.innerHTML = `
                 <p>No videos found</p>
@@ -194,33 +198,29 @@ async function loadVideos() {
 }
 
 /**
- * 初始化指定播放器的随机播放索引
+ * 将视频均分给四个播放器
  * 
- * 为指定播放器创建独立的视频索引数组并使用 Fisher-Yates 算法进行随机打乱。
- * 
- * @param {number} playerIndex - 播放器索引（0-3）
+ * 将视频列表均分为四等份，余数依次分配到前几个播放器。
+ * 例如：13个视频分配为 4, 3, 3, 3
  */
-function initShuffledIndices(playerIndex) {
-    const indices = [];
-    for (let i = 0; i < videos.length; i++) {
-        indices.push(i);
-    }
-    for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    shuffledIndicesArray[playerIndex] = indices;
-}
-
-/**
- * 初始化所有播放器的随机播放索引
- * 
- * 为四个播放器分别创建独立的随机索引数组。
- */
-function initAllShuffledIndices() {
+function distributeVideos() {
+    playerVideoLists = [[], [], [], []];
+    currentPlayIndices = [0, 0, 0, 0];
+    
+    const totalVideos = videos.length;
+    const baseCount = Math.floor(totalVideos / 4);
+    const remainder = totalVideos % 4;
+    
+    let videoIndex = 0;
     for (let i = 0; i < 4; i++) {
-        initShuffledIndices(i);
+        const count = baseCount + (i < remainder ? 1 : 0);
+        for (let j = 0; j < count && videoIndex < totalVideos; j++) {
+            playerVideoLists[i].push(videos[videoIndex]);
+            videoIndex++;
+        }
     }
+    
+    console.log('[MultiPlay] 视频分配:', playerVideoLists.map((list, i) => `播放器${i}: ${list.length}个`).join(', '));
 }
 
 /**
@@ -256,60 +256,33 @@ function startAllPlayers() {
     }
 }
 
-/* ==================== 视频选择逻辑 ==================== */
-
-/**
- * 获取下一个可用的视频索引
- * 
- * 从该播放器独立的随机索引数组中获取下一个视频，确保不与其他播放器正在播放的视频重复。
- * 如果所有视频都已被播放过，则重新为该播放器生成随机索引数组。
- * 
- * @param {number} playerIndex - 播放器索引（0-3）
- * @returns {number} 视频在原数组中的索引
- */
-function getNextAvailableIndex(playerIndex) {
-    const otherPlayingIds = currentVideoIds.filter((id, idx) => idx !== playerIndex);
-    const shuffledIndices = shuffledIndicesArray[playerIndex];
-    
-    let attempts = 0;
-    const maxAttempts = videos.length;
-    
-    while (attempts < maxAttempts) {
-        if (currentIndices[playerIndex] >= shuffledIndices.length) {
-            initShuffledIndices(playerIndex);
-            currentIndices[playerIndex] = 0;
-        }
-        
-        const videoIndex = shuffledIndicesArray[playerIndex][currentIndices[playerIndex]];
-        const videoId = videos[videoIndex].id;
-        
-        if (!otherPlayingIds.includes(videoId)) {
-            currentIndices[playerIndex]++;
-            return videoIndex;
-        }
-        
-        currentIndices[playerIndex]++;
-        attempts++;
-    }
-    
-    return shuffledIndicesArray[playerIndex][0];
-}
-
 /**
  * 播放下一个视频
  * 
- * 为指定播放器加载并播放下一个视频。
+ * 为指定播放器加载并播放分配列表中的下一个视频。
+ * 如果该播放器的列表播放完毕，则重新从服务器加载并重新分配。
  * 
  * @param {number} playerIndex - 播放器索引（0-3）
  */
 function playNextVideo(playerIndex) {
-    if (videos.length === 0) return;
+    const videoList = playerVideoLists[playerIndex];
     
-    const videoIndex = getNextAvailableIndex(playerIndex);
-    const videoData = videos[videoIndex];
+    if (!videoList || videoList.length === 0) {
+        console.log(`[MultiPlay] 播放器${playerIndex}没有分配视频，跳过`);
+        return;
+    }
+    
+    if (currentPlayIndices[playerIndex] >= videoList.length) {
+        console.log(`[MultiPlay] 播放器${playerIndex}列表播放完毕，重新加载`);
+        loadVideosFromServer();
+        return;
+    }
+    
+    const videoData = videoList[currentPlayIndices[playerIndex]];
     const player = players[playerIndex];
     
     currentVideoIds[playerIndex] = videoData.id;
+    currentPlayIndices[playerIndex]++;
     
     player.video.src = `/video/stream/${videoData.id}`;
     player.title.textContent = videoData.title;

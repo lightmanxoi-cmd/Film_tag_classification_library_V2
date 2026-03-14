@@ -219,7 +219,7 @@ class VideoService:
         """
         if page < 1:
             page = 1
-        if page_size < 1 or page_size > 100:
+        if page_size < 1 or page_size > 50000:
             page_size = 20
         
         videos, total = self.video_repo.list_all(
@@ -275,7 +275,7 @@ class VideoService:
         
         if page < 1:
             page = 1
-        if page_size < 1 or page_size > 100:
+        if page_size < 1 or page_size > 50000:
             page_size = 20
         
         videos, total = self.video_repo.list_by_tag_ids(
@@ -341,7 +341,7 @@ class VideoService:
         
         if page < 1:
             page = 1
-        if page_size < 1 or page_size > 100:
+        if page_size < 1 or page_size > 50000:
             page_size = 20
         
         videos, total = self.video_repo.list_by_tags_advanced(
