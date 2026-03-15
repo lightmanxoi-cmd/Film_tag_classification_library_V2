@@ -64,6 +64,30 @@ class VideoImporterCLI:
     
     VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.3gp', '.ogv'}
     
+    TAG_INDEX_MAP = {
+        '_BAOCHAO': ('爆炒', '爆炒'),
+        '_666': ('评级', '五星'),
+        '_3P': ('类型', '3P'),
+        '_FL': ('类型', '正入-躺'),
+        '_BK': ('类型', '后入-跪'),
+        '_BL': ('类型', '后入-躺'),
+        '_BS': ('类型', '后入-站'),
+        '_BP': ('类型', '后入-趴'),
+        '_GU': ('类型', '女上'),
+        '_FS': ('类型', '正入-站'),
+        '_HU': ('类型', '抱草'),
+        '_FG': ('类型', '前贴玻璃'),
+        '_BSW': ('袜子类型', '白丝'),
+        '_BTW': ('袜子类型', '白色小腿袜'),
+        '_BYW': ('袜子类型', '白色渔网'),
+        '_BGX': ('袜子类型', '白色过膝袜'),
+        '_HYW': ('袜子类型', '黑色渔网'),
+        '_HGX': ('袜子类型', '黑色过膝袜'),
+        '_HTW': ('袜子类型', '黑色小腿袜'),
+        '_HSW': ('袜子类型', '黑丝'),
+        '_RSW': ('袜子类型', '肉丝'),
+    }
+    
     def __init__(self, db_url: Optional[str] = None):
         """
         初始化视频导入工具
@@ -193,16 +217,16 @@ class VideoImporterCLI:
         
         return sorted(video_files)
 
-    def _scan_666_video_files(self, folder_path: str, recursive: bool = False) -> List[str]:
+    def _scan_auto_tag_video_files(self, folder_path: str, recursive: bool = False) -> List[str]:
         """
-        扫描文件夹中以_666结尾的视频文件
+        扫描文件夹中包含标签索引特征的视频文件
         
         Args:
             folder_path: 文件夹路径
             recursive: 是否递归扫描子文件夹
             
         Returns:
-            以_666结尾的视频文件路径列表
+            包含标签索引特征的视频文件路径列表
         """
         video_files = []
         
@@ -212,17 +236,43 @@ class VideoImporterCLI:
         if recursive:
             for root, dirs, files in os.walk(folder_path):
                 for filename in files:
-                    if self._is_video_file(filename) and filename.rsplit('.', 1)[0].endswith('_666'):
-                        video_files.append(os.path.join(root, filename))
+                    if self._is_video_file(filename):
+                        name_without_ext = os.path.splitext(filename)[0]
+                        for index_key in self.TAG_INDEX_MAP.keys():
+                            if index_key in name_without_ext:
+                                video_files.append(os.path.join(root, filename))
+                                break
         else:
             for filename in os.listdir(folder_path):
                 filepath = os.path.join(folder_path, filename)
                 if os.path.isfile(filepath) and self._is_video_file(filename):
                     name_without_ext = os.path.splitext(filename)[0]
-                    if name_without_ext.endswith('_666'):
-                        video_files.append(filepath)
+                    for index_key in self.TAG_INDEX_MAP.keys():
+                        if index_key in name_without_ext:
+                            video_files.append(filepath)
+                            break
         
         return sorted(video_files)
+    
+    def _extract_tags_from_filename(self, filename: str) -> tuple:
+        """
+        从文件名中提取标签索引特征
+        
+        Args:
+            filename: 文件名（不含扩展名）
+            
+        Returns:
+            (标签对列表, 匹配的索引列表)
+        """
+        tag_pairs = []
+        matched_indices = []
+        
+        for index_key, (level1, level2) in self.TAG_INDEX_MAP.items():
+            if index_key in filename:
+                tag_pairs.append((level1, level2))
+                matched_indices.append(index_key)
+        
+        return tag_pairs, matched_indices
     
     def import_video(
         self,
@@ -382,15 +432,124 @@ class VideoImporterCLI:
         print(f"  - 总计: {len(video_files)} 个")
         print("="*60)
 
-    def import_five_star_videos(
+    def _import_video_with_multiple_tags(
+        self,
+        file_path: str,
+        tag_pairs: List[tuple]
+    ) -> bool:
+        """
+        导入视频并添加多组标签
+        
+        根据标题判断视频是否已存在：
+        - 如果存在：更新路径并添加新标签
+        - 如果不存在：创建新视频记录并添加标签
+        
+        Args:
+            file_path: 视频文件路径
+            tag_pairs: 标签对列表，每个元素为 (一级标签名, 二级标签名)
+            
+        Returns:
+            bool: 导入成功返回True，失败返回False
+        """
+        if not os.path.exists(file_path):
+            print(f"✗ 错误: 文件不存在 '{file_path}'")
+            return False
+        
+        filename = os.path.basename(file_path)
+        title = os.path.splitext(filename)[0]
+        
+        with self.db_manager.get_session() as session:
+            video_service = VideoService(session)
+            tag_service = TagService(session)
+            video_tag_service = VideoTagService(session)
+            
+            tag_ids = []
+            for level1_tag_name, level2_tag_name in tag_pairs:
+                try:
+                    level1_tag = tag_service.get_tag_by_name(level1_tag_name, parent_id=None)
+                    level1_tag_id = level1_tag.id
+                except TagNotFoundError:
+                    print(f"✗ 错误: 一级标签 '{level1_tag_name}' 不存在")
+                    return False
+                
+                level2_tag_id = None
+                if level2_tag_name:
+                    try:
+                        level2_tag = tag_service.get_tag_by_name(level2_tag_name, parent_id=level1_tag_id)
+                        level2_tag_id = level2_tag.id
+                    except TagNotFoundError:
+                        print(f"✗ 错误: 二级标签 '{level2_tag_name}' 不存在 (父标签: {level1_tag_name})")
+                        return False
+                
+                tag_ids.append(level1_tag_id)
+                if level2_tag_id:
+                    tag_ids.append(level2_tag_id)
+            
+            stmt = select(Video).where(Video.title == title)
+            existing_video = session.execute(stmt).scalar_one_or_none()
+            
+            if existing_video:
+                print(f"检测到已存在的视频 (标题匹配): {existing_video.title} (ID: {existing_video.id})")
+
+                update_data = VideoUpdate(title=title, file_path=file_path)
+                video_service.update_video(existing_video.id, update_data)
+
+                existing_tags = video_tag_service.get_video_tags(existing_video.id)
+                existing_tag_ids = {tag.id for tag in existing_tags}
+
+                tags_added = 0
+                for tag_id in tag_ids:
+                    if tag_id not in existing_tag_ids:
+                        video_tag_service.add_tag_to_video(existing_video.id, tag_id)
+                        tags_added += 1
+
+                updated_tags = video_tag_service.get_video_tags(existing_video.id)
+
+                print(f"✓ 成功更新视频:")
+                print(f"  - 标题: '{existing_video.title}'")
+                print(f"  - 路径: '{file_path}'")
+                print(f"  - 新增标签: {tags_added} 个")
+                print(f"  - 当前标签数: {len(updated_tags)}")
+
+            else:
+                video_data = VideoCreate(
+                    file_path=file_path,
+                    title=title
+                )
+
+                video = video_service.create_video(video_data)
+
+                for tag_id in tag_ids:
+                    video_tag_service.add_tag_to_video(video.id, tag_id)
+
+                tag_names = []
+                for level1_tag_name, level2_tag_name in tag_pairs:
+                    if level2_tag_name:
+                        tag_names.append(f"{level1_tag_name}/{level2_tag_name}")
+                    else:
+                        tag_names.append(level1_tag_name)
+                
+                print(f"✓ 成功导入视频:")
+                print(f"  - ID: {video.id}")
+                print(f"  - 标题: {video.title}")
+                print(f"  - 路径: {video.file_path}")
+                print(f"  - 添加标签: {', '.join(tag_names)}")
+                print(f"  - 标签总数: {len(tag_ids)}")
+
+        return True
+
+    def import_auto_tag_videos(
         self,
         folder_path: str,
         recursive: bool = False
     ) -> None:
         """
-        批量导入以_666结尾的五星评级视频
+        全自动批量导入视频并根据文件名特征自动添加标签
 
-        自动为这些视频添加一级标签"评级"和二级标签"五星"。
+        根据文件名中的标签索引特征自动添加对应标签。
+        支持的标签索引包括：_666, _BAOCHAO, _3P, _FL, _BK, _BL, _BS, _BP, 
+        _GU, _FS, _HU, _FG, _BSW, _BTW, _BYW, _BGX, _HYW, _HGX, _HTW, _HSW, _RSW
+
         如果视频已在库中，只添加标签；如果不在库中，先入库再添加标签。
 
         Args:
@@ -401,18 +560,23 @@ class VideoImporterCLI:
             print(f"✗ 错误: 文件夹不存在 '{folder_path}'")
             return
 
-        video_files = self._scan_666_video_files(folder_path, recursive)
+        video_files = self._scan_auto_tag_video_files(folder_path, recursive)
 
         if not video_files:
-            print(f"✗ 在文件夹 '{folder_path}' 中未找到以_666结尾的视频文件")
+            print(f"✗ 在文件夹 '{folder_path}' 中未找到包含标签索引特征的视频文件")
             return
 
-        print(f"\n在文件夹 '{folder_path}' 中找到 {len(video_files)} 个以_666结尾的视频文件")
+        print(f"\n在文件夹 '{folder_path}' 中找到 {len(video_files)} 个包含标签索引特征的视频文件")
         print(f"递归扫描: {'是' if recursive else '否'}")
-        print(f"将自动添加标签: 评级 > 五星")
+        print(f"支持的标签索引:")
+        for index_key, (level1, level2) in self.TAG_INDEX_MAP.items():
+            print(f"  {index_key}: {level1}/{level2}")
         print("\n文件列表:")
         for i, vf in enumerate(video_files, 1):
-            print(f"  {i}. {os.path.basename(vf)}")
+            filename = os.path.basename(vf)
+            name_without_ext = os.path.splitext(filename)[0]
+            _, matched_indices = self._extract_tags_from_filename(name_without_ext)
+            print(f"  {i}. {filename} [{', '.join(matched_indices)}]")
 
         confirm = input("\n确认导入并添加标签? (y/n): ").strip().lower()
         if confirm != 'y':
@@ -423,12 +587,23 @@ class VideoImporterCLI:
 
         success_count = 0
         failed_count = 0
-        skipped_count = 0
 
         for i, video_file in enumerate(video_files, 1):
-            print(f"[{i}/{len(video_files)}] 处理: {os.path.basename(video_file)}")
+            filename = os.path.basename(video_file)
+            name_without_ext = os.path.splitext(filename)[0]
+            
+            print(f"[{i}/{len(video_files)}] 处理: {filename}")
+            
+            tag_pairs, matched_indices = self._extract_tags_from_filename(name_without_ext)
+            
+            if not tag_pairs:
+                print("  ✗ 未检测到有效标签索引，跳过")
+                failed_count += 1
+                print()
+                continue
+            
             try:
-                if self.import_video(video_file, "评级", "五星"):
+                if self._import_video_with_multiple_tags(video_file, tag_pairs):
                     success_count += 1
                 else:
                     failed_count += 1
@@ -438,7 +613,7 @@ class VideoImporterCLI:
             print()
 
         print("="*60)
-        print(f"五星视频批量导入完成!")
+        print(f"全自动批量导入完成!")
         print(f"  - 成功: {success_count} 个")
         print(f"  - 失败: {failed_count} 个")
         print(f"  - 总计: {len(video_files)} 个")
@@ -477,7 +652,7 @@ class VideoImporterCLI:
                 print("请选择导入模式:")
                 print("  1. 单个文件导入")
                 print("  2. 文件夹批量导入")
-                print("  3. 五星视频_666录入")
+                print("  3. 全自动批量导入")
                 print("  q. 退出")
 
                 mode = input("\n请输入选项 (1/2/3/q): ").strip().lower()
@@ -546,7 +721,7 @@ class VideoImporterCLI:
                     recursive_input = input("是否递归扫描子文件夹? (y/n, 默认n): ").strip().lower()
                     recursive = recursive_input == 'y'
 
-                    self.import_five_star_videos(folder_path, recursive)
+                    self.import_auto_tag_videos(folder_path, recursive)
                     print()
                     continue
 
