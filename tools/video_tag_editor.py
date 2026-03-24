@@ -684,15 +684,138 @@ def edit_menu(editor: VideoTagEditor, video: dict):
             print("无效的选择")
 
 
+def quick_five_star_flow(editor: VideoTagEditor):
+    """
+    快捷五星标记流程
+    
+    快速为视频添加"评级/五星"标签的流程：
+    1. 提示用户输入视频名称关键词
+    2. 搜索匹配的视频
+    3. 检查视频是否已有"评级"和"五星"标签
+    4. 根据现有标签情况添加缺失的标签
+    5. 完成后继续循环，直到用户主动退出
+    
+    Args:
+        editor: 视频标签编辑器实例
+    """
+    all_tags = editor.get_all_tags()
+    
+    rating_tag_id = None
+    five_star_tag_id = None
+    
+    for tag in all_tags:
+        if tag["name"] == "评级" and tag.get("level") == 1:
+            rating_tag_id = tag["id"]
+        if tag["name"] == "五星" and tag.get("parent_name") == "评级":
+            five_star_tag_id = tag["id"]
+    
+    if not rating_tag_id or not five_star_tag_id:
+        print("\n错误：系统中未找到'评级'或'五星'标签，请先创建这些标签。")
+        input("\n按回车键继续...")
+        return
+    
+    while True:
+        print("\n" + "=" * 60)
+        print("  快捷五星标记")
+        print("=" * 60)
+        print("  为视频快速添加'评级/五星'标签")
+        print("  （输入 q 返回主菜单）")
+        print("=" * 60)
+        
+        keyword = input("\n请输入视频名称关键词: ").strip()
+        
+        if keyword.lower() == "q":
+            return
+        
+        if not keyword:
+            print("请输入有效的搜索关键词")
+            continue
+        
+        videos = editor.search_videos(keyword)
+        
+        if not videos:
+            print(f"未找到包含 '{keyword}' 的视频")
+            continue
+        
+        if len(videos) == 1:
+            selected = videos[0]
+        else:
+            selected = select_from_list(videos, f"搜索结果 (共 {len(videos)} 个视频)", "title")
+            if not selected:
+                continue
+        
+        video_id = selected["id"]
+        video_title = selected["title"]
+        
+        current_tags = editor.get_video_tags(video_id)
+        
+        has_rating_tag = False
+        has_five_star_tag = False
+        
+        for tag in current_tags:
+            if tag.get("parent_name") == "评级" and tag["name"] == "五星":
+                has_five_star_tag = True
+            if tag["name"] == "评级" and not tag.get("parent_id"):
+                has_rating_tag = True
+        
+        if has_five_star_tag:
+            print(f"  '{video_title}' 已拥有'评级/五星'标签，跳过。")
+            continue
+        
+        tags_to_add = []
+        
+        if not has_rating_tag:
+            tags_to_add.append(("评级", rating_tag_id))
+        
+        tags_to_add.append(("五星", five_star_tag_id))
+        
+        added_count = 0
+        failed_tags = []
+        
+        for name, tag_id in tags_to_add:
+            result = editor.add_tag_to_video(video_id, tag_id)
+            if result["added"]:
+                added_count += 1
+            else:
+                failed_tags.append(name)
+        
+        if added_count > 0:
+            print(f"✓ '{video_title}' 添加成功 (+{added_count} 标签)")
+        
+        if failed_tags:
+            print(f"  以下标签添加失败: {', '.join(failed_tags)}")
+
+
+def show_main_menu():
+    """
+    显示主菜单
+    
+    显示程序主菜单选项。
+    """
+    print("\n" + "=" * 60)
+    print("  视频标签编辑器 v2.0")
+    print("=" * 60)
+    print("\n  请选择功能:")
+    print_separator()
+    print("  [1] 单独搜索更改")
+    print("      - 搜索视频并编辑标签（添加/移除/替换/清空）")
+    print()
+    print("  [2] 快捷五星标记")
+    print("      - 快速为视频添加'评级/五星'标签")
+    print_separator()
+    print("  [0] 退出程序")
+    print_separator()
+
+
 def main():
     """
     主函数 - 程序入口
     
     初始化编辑器并启动交互式界面。
-    主循环处理视频搜索和编辑流程。
+    主循环处理功能选择和相应操作。
     """
     print("\n" + "=" * 60)
-    print("  视频标签编辑器 v1.0")
+    print("  视频标签编辑器 v2.0")
     print("  用于交互式编辑视频标签")
     print("=" * 60)
     
@@ -715,13 +838,25 @@ def main():
     
     while True:
         try:
-            video = search_video_flow(editor)
+            show_main_menu()
             
-            if video is None:
+            choice = input("请选择功能 (0/1/2): ").strip().lower()
+            
+            if choice == "0" or choice == "q":
                 print("\n再见！")
                 break
-            
-            edit_menu(editor, video)
+            elif choice == "1":
+                video = search_video_flow(editor)
+                
+                if video is None:
+                    continue
+                
+                edit_menu(editor, video)
+            elif choice == "2":
+                quick_five_star_flow(editor)
+            else:
+                print("无效的选择，请输入 0、1 或 2")
+                input("\n按回车键继续...")
             
         except KeyboardInterrupt:
             print("\n\n操作已取消，再见！")
