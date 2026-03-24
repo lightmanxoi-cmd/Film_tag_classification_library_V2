@@ -246,7 +246,9 @@ class VideoService:
         tag_ids: List[int],
         page: int = 1,
         page_size: int = 20,
-        match_all: bool = False
+        match_all: bool = False,
+        random_order: bool = False,
+        random_seed: Optional[int] = None
     ) -> VideoListResponse:
         """
         根据标签筛选视频
@@ -260,6 +262,8 @@ class VideoService:
             page: 页码
             page_size: 每页记录数
             match_all: 是否必须匹配所有标签
+            random_order: 是否随机排序
+            random_seed: 随机种子，用于复现随机排序结果
         
         Returns:
             VideoListResponse: 分页响应对象
@@ -282,7 +286,9 @@ class VideoService:
             tag_ids=tag_ids,
             page=page,
             page_size=page_size,
-            match_all=match_all
+            match_all=match_all,
+            random_order=random_order,
+            random_seed=random_seed
         )
         
         items = [self._to_response(v) for v in videos]

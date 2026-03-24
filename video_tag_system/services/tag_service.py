@@ -145,16 +145,18 @@ class TagService:
     def get_tag_by_name(
         self, 
         name: str, 
-        parent_id: Optional[int] = None
+        parent_id: Optional[int] = None,
+        parent_name: Optional[str] = None
     ) -> TagResponse:
         """
         根据名称获取标签
         
-        通过标签名称和父标签ID查找标签。
+        通过标签名称和父标签ID或名称查找标签。
         
         Args:
             name: 标签名称
             parent_id: 父标签ID，None 表示一级标签
+            parent_name: 父标签名称，与 parent_id 二选一
         
         Returns:
             TagResponse: 标签响应对象
@@ -162,6 +164,11 @@ class TagService:
         Raises:
             TagNotFoundError: 标签不存在时抛出
         """
+        if parent_name and not parent_id:
+            parent_tag = self.tag_repo.get_by_name_and_parent(parent_name, None)
+            if parent_tag:
+                parent_id = parent_tag.id
+        
         tag = self.tag_repo.get_by_name_and_parent(name, parent_id)
         if not tag:
             raise TagNotFoundError(tag_name=name)

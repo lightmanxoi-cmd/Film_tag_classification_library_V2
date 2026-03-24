@@ -64,6 +64,7 @@ def get_videos():
     获取视频列表
     
     支持分页、搜索、随机排序。
+    默认情况下（无筛选条件时）只显示"五星"标签的视频。
     
     Query Parameters:
         page: 页码，默认1
@@ -71,6 +72,7 @@ def get_videos():
         search: 搜索关键词
         random: 是否随机排序，默认true
         seed: 随机种子（用于保持随机顺序一致）
+        all_videos: 是否显示全部视频（跳过默认五星筛选），默认false
     
     Returns:
         JSON响应，包含视频列表和分页信息
@@ -83,9 +85,10 @@ def get_videos():
     search = request.args.get('search', None)
     random_order = request.args.get('random', 'true').lower() == 'true'
     random_seed = request.args.get('seed', None, type=int)
+    show_all = request.args.get('all_videos', 'false').lower() == 'true'
     
     cache = get_cache()
-    cache_key = f"videos:list:page:{page}:size:{page_size}:search:{search or ''}:random:{random_order}:seed:{random_seed or 0}"
+    cache_key = f"videos:list:page:{page}:size:{page_size}:search:{search or ''}:random:{random_order}:seed:{random_seed or 0}:all:{show_all}"
     
     cached_result = cache.get(cache_key)
     if cached_result is not None:
@@ -93,13 +96,34 @@ def get_videos():
     
     video_svc, tag_svc, video_tag_svc, _ = get_services()
     
-    result = video_svc.list_videos(
-        page=page,
-        page_size=page_size,
-        search=search,
-        random_order=random_order,
-        random_seed=random_seed
-    )
+    if not search and not show_all:
+        from video_tag_system.models.tag import Tag
+        five_star_tag = tag_svc.get_tag_by_name('五星', parent_name='评级')
+        if five_star_tag:
+            result = video_svc.list_videos_by_tags(
+                tag_ids=[five_star_tag.id],
+                page=page,
+                page_size=page_size,
+                match_all=False,
+                random_order=random_order,
+                random_seed=random_seed
+            )
+        else:
+            result = video_svc.list_videos(
+                page=page,
+                page_size=page_size,
+                search=search,
+                random_order=random_order,
+                random_seed=random_seed
+            )
+    else:
+        result = video_svc.list_videos(
+            page=page,
+            page_size=page_size,
+            search=search,
+            random_order=random_order,
+            random_seed=random_seed
+        )
     
     from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
     thumbnail_gen = get_thumbnail_generator()

@@ -341,7 +341,9 @@ class VideoRepository:
         tag_ids: List[int],
         page: int = 1,
         page_size: int = 20,
-        match_all: bool = False
+        match_all: bool = False,
+        random_order: bool = False,
+        random_seed: Optional[int] = None
     ) -> Tuple[List[Video], int]:
         """
         根据标签ID列表获取视频
@@ -355,6 +357,8 @@ class VideoRepository:
             page: 页码
             page_size: 每页记录数
             match_all: 是否必须匹配所有标签
+            random_order: 是否随机排序
+            random_seed: 随机种子，用于复现随机排序结果
         
         Returns:
             Tuple[List[Video], int]: (视频列表, 总记录数)
@@ -384,12 +388,34 @@ class VideoRepository:
         
         total = self.session.execute(count_stmt).scalar()
         
-        stmt = stmt.order_by(Video.created_at.desc())
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        
-        videos = list(self.session.execute(stmt).scalars().all())
-        
-        return videos, total
+        if random_order and random_seed is not None:
+            random.seed(random_seed)
+            if match_all:
+                all_ids_stmt = select(VideoTag.video_id).where(VideoTag.tag_id.in_(tag_ids)).group_by(VideoTag.video_id).having(func.count(VideoTag.tag_id) == len(tag_ids))
+            else:
+                all_ids_stmt = select(VideoTag.video_id).where(VideoTag.tag_id.in_(tag_ids)).distinct()
+            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
+            random.shuffle(all_ids)
+            
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            page_ids = all_ids[start_idx:end_idx]
+            
+            if not page_ids:
+                return [], total
+            
+            stmt = select(Video).where(Video.id.in_(page_ids))
+            videos = list(self.session.execute(stmt).scalars().all())
+            
+            id_to_video = {v.id: v for v in videos}
+            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
+            
+            return ordered_videos, total
+        else:
+            stmt = stmt.order_by(Video.created_at.desc())
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            videos = list(self.session.execute(stmt).scalars().all())
+            return videos, total
     
     def list_by_tags_advanced(
         self,
