@@ -7,6 +7,8 @@
  * - 支持分段浏览模式（将视频分成10段快速预览）
  * - 支持全屏播放和视频适配模式切换
  * - 自动隐藏控制栏
+ * - 时钟尺寸调节和位置拖拽
+ * - Electron状态记忆
  * 
  * 主要功能模块：
  * 1. 视频加载模块：loadVideos、initShuffledIndices
@@ -19,7 +21,12 @@
  * 创建时间：2024
  */
 
+import { ClockController, injectClockStyles } from './modules/components/clock-controller.js';
+
 /* ==================== 全局变量定义 ==================== */
+
+/** 时钟控制器实例 */
+let clockController = null;
 
 /** 视频列表数据 */
 let videos = [];
@@ -245,6 +252,7 @@ async function loadVideosFromServer(autoPlay = true) {
                 playerContainer.style.display = 'block';
                 startClock();
                 setupEventListeners();
+                initClockController();
             }
             
             if (autoPlay) {
@@ -656,9 +664,14 @@ function updateFullscreenButton() {
  * 切换时钟显示
  */
 function toggleClock() {
-    showClock = !showClock;
-    clockOverlay.classList.toggle('hidden', !showClock);
-    clockToggleBtn.classList.toggle('active', showClock);
+    if (clockController) {
+        const visible = clockController.toggle();
+        clockToggleBtn.classList.toggle('active', visible);
+    } else {
+        showClock = !showClock;
+        clockOverlay.classList.toggle('hidden', !showClock);
+        clockToggleBtn.classList.toggle('active', showClock);
+    }
 }
 
 /**
@@ -886,12 +899,37 @@ function goBack() {
     window.location.href = '/';
 }
 
+window.goBack = goBack;
+
 /* ==================== 初始化 ==================== */
 
 /**
  * 页面加载完成后初始化
  */
 document.addEventListener('DOMContentLoaded', () => {
+    injectClockStyles();
+    
     loadVideos();
     startSessionKeepAlive();
 });
+
+export function initClockController() {
+    if (clockController) {
+        console.log('[ClockWallpaper] ClockController already initialized');
+        return;
+    }
+    
+    console.log('[ClockWallpaper] Initializing ClockController');
+    console.log('[ClockWallpaper] clockOverlay:', clockOverlay);
+    console.log('[ClockWallpaper] playerContainer:', playerContainer);
+    
+    clockController = new ClockController({
+        clockElement: clockOverlay,
+        containerElement: playerContainer,
+        pageId: 'clock_wallpaper'
+    });
+    
+    console.log('[ClockWallpaper] ClockController created:', clockController);
+}
+
+window.initClockController = initClockController;

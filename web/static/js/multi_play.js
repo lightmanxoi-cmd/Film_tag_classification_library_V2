@@ -9,6 +9,8 @@
  * - 支持时钟叠加显示
  * - 自动隐藏控制栏
  * - 任意播放器播放完毕后重新加载随机列表并重新分配
+ * - 时钟尺寸调节和位置拖拽
+ * - Electron状态记忆
  * 
  * 主要功能模块：
  * 1. 视频加载模块：loadVideos、loadVideosFromServer、distributeVideos
@@ -21,7 +23,12 @@
  * 创建时间：2024
  */
 
+import { ClockController, injectClockStyles } from './modules/components/clock-controller.js';
+
 /* ==================== 全局变量定义 ==================== */
+
+/** 时钟控制器实例 */
+let clockController = null;
 
 /** 视频列表数据 */
 let videos = [];
@@ -177,6 +184,7 @@ async function loadVideosFromServer(autoPlay = true) {
                 initPlayers();
                 startClock();
                 setupEventListeners();
+                initClockController();
             }
             
             if (autoPlay) {
@@ -450,9 +458,14 @@ function toggleAllMute() {
  * 切换时钟显示
  */
 function toggleClockDisplay() {
-    showClock = !showClock;
-    clockOverlay.classList.toggle('hidden', !showClock);
-    clockToggleBtn.classList.toggle('active', showClock);
+    if (clockController) {
+        const visible = clockController.toggle();
+        clockToggleBtn.classList.toggle('active', visible);
+    } else {
+        showClock = !showClock;
+        clockOverlay.classList.toggle('hidden', !showClock);
+        clockToggleBtn.classList.toggle('active', showClock);
+    }
 }
 
 /**
@@ -649,12 +662,28 @@ function goBack() {
     window.location.href = '/';
 }
 
+window.goBack = goBack;
+window.toggleClockDisplay = toggleClockDisplay;
+
 /* ==================== 初始化 ==================== */
+
+export function initClockController() {
+    if (clockController) return;
+    
+    clockController = new ClockController({
+        clockElement: clockOverlay,
+        containerElement: multiPlayerContainer,
+        pageId: 'multi_play'
+    });
+}
+
+window.initClockController = initClockController;
 
 /**
  * 页面加载完成后初始化
  */
 document.addEventListener('DOMContentLoaded', () => {
+    injectClockStyles();
     loadVideos();
     startSessionKeepAlive();
 });

@@ -134,12 +134,15 @@ html, body {
     bottom: 2rem;
     right: 3rem;
     z-index: 20;
-    pointer-events: none;
+    pointer-events: auto;
     transition: opacity 0.3s ease;
+    cursor: move;
+    user-select: none;
 }
 
 .clock-overlay.hidden {
     opacity: 0;
+    pointer-events: none;
 }
 
 .clock-time {
