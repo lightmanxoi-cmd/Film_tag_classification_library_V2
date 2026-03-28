@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain, screen, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -224,6 +224,36 @@ function createWindow() {
     });
 
     setupMenu();
+    setupGlobalShortcuts();
+}
+
+function setupGlobalShortcuts() {
+    const homeResult = globalShortcut.register('Home', () => {
+        if (!mainWindow) return;
+        
+        if (mainWindow.isAlwaysOnTop()) {
+            mainWindow.setAlwaysOnTop(false);
+            console.log('[Shortcut] Always on top disabled');
+        } else {
+            mainWindow.setAlwaysOnTop(true);
+            console.log('[Shortcut] Always on top enabled');
+        }
+    });
+    
+    if (!homeResult) {
+        console.error('[Shortcut] Failed to register Home shortcut');
+    }
+    
+    const endResult = globalShortcut.register('End', () => {
+        console.log('[Shortcut] Closing application');
+        app.quit();
+    });
+    
+    if (!endResult) {
+        console.error('[Shortcut] Failed to register End shortcut');
+    }
+    
+    console.log('[Shortcut] Global shortcuts registered: Home (toggle always on top), End (close app)');
 }
 
 function setupMenu() {
@@ -316,6 +346,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    globalShortcut.unregisterAll();
+    console.log('[Shortcut] All shortcuts unregistered');
     stopAutoSave();
     stopServer();
 });
