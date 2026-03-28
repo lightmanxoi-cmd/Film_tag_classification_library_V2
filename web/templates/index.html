@@ -31,9 +31,99 @@
         .fast-scroll .video-card .video-overlay {
             opacity: 0;
         }
+        
+        .electron-titlebar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 32px;
+            background: #0a0a0a;
+            z-index: 10000;
+            -webkit-app-region: drag;
+        }
+        
+        .electron-titlebar .title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 12px;
+            line-height: 32px;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        .electron-titlebar .window-controls {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 32px;
+            display: flex;
+            -webkit-app-region: no-drag;
+        }
+        
+        .electron-titlebar .window-btn {
+            width: 46px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .electron-titlebar .window-btn:hover {
+            background: #333;
+            color: #fff;
+        }
+        
+        .electron-titlebar .window-btn.close:hover {
+            background: #e50914;
+            color: #fff;
+        }
+        
+        .electron-titlebar .window-btn svg {
+            width: 12px;
+            height: 12px;
+        }
+        
+        body.electron-mode .electron-titlebar {
+            display: block;
+        }
+        
+        body.electron-mode .navbar {
+            top: 32px;
+        }
+        
+        body.electron-mode .main-container {
+            padding-top: 100px;
+        }
+        
+        body.electron-mode .mobile-bottom-bar {
+            bottom: 0;
+        }
     </style>
 </head>
 <body>
+    <div class="electron-titlebar" id="electronTitlebar">
+        <span class="title">Video Library</span>
+        <div class="window-controls">
+            <button class="window-btn minimize" onclick="window.electronAPI?.minimize()" title="最小化">
+                <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 6h8v1H2z"/></svg>
+            </button>
+            <button class="window-btn maximize" onclick="window.electronAPI?.maximize()" title="最大化">
+                <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 2v8h8V2H2zm1 1h6v6H3V3z"/></svg>
+            </button>
+            <button class="window-btn close" onclick="window.electronAPI?.close()" title="关闭">
+                <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+        </div>
+    </div>
     <nav class="navbar">
         <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
             <span class="hamburger-icon">

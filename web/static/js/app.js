@@ -654,6 +654,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('tag-selected', (e) => {
         filterByTag(e.detail.tagId, e.detail.tagName);
     });
+    
+    if (window.electronAPI && window.electronAPI.isElectron) {
+        document.body.classList.add('electron-mode');
+        console.log('[Electron] Running in Electron mode');
+    }
 });
 
 document.addEventListener('keydown', function(e) {
