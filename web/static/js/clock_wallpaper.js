@@ -294,9 +294,10 @@ function playNextVideo() {
     
     if (segmentTimeout) {
         clearTimeout(segmentTimeout);
+        segmentTimeout = null;
     }
     
-    currentSegment = 0;
+    currentSegment = 1;
     
     const videoData = videos[currentPlayIndex];
     currentVideoIndex = currentPlayIndex;
@@ -328,24 +329,32 @@ function playNextVideo() {
 /**
  * 启动分段播放模式
  * 
- * 将视频分成10个等分段，每段播放6秒后自动跳转到下一段。
+ * 将视频分成10个等分段，每段播放30秒，总共浓缩为5分钟浏览。
  * 用于快速浏览长视频内容。
  * 
  * @param {number} videoDuration - 视频总时长（秒）
  */
 function startSegmentPlayback(videoDuration) {
+    console.log('[BrowseMode] Starting segment playback, duration:', videoDuration);
+    
     const segmentDuration = videoDuration / 10;
+    const segmentPlayTime = 30;
     let currentSeg = 0;
     
     const playNextSegment = () => {
         if (currentSeg >= 10) {
+            console.log('[BrowseMode] All segments played, playing next video');
             playNextVideo();
             return;
         }
         
         const segmentStartTime = currentSeg * segmentDuration;
+        console.log('[BrowseMode] Jumping to segment', currentSeg + 1, 'at time:', segmentStartTime);
+        
         video.currentTime = segmentStartTime;
         currentTime = segmentStartTime;
+        progressBar.value = currentTime;
+        currentTimeEl.textContent = formatTime(currentTime);
         
         if (video.paused) {
             video.play().catch(() => {});
@@ -354,12 +363,12 @@ function startSegmentPlayback(videoDuration) {
         segmentTimeout = setTimeout(() => {
             currentSeg++;
             currentSegment = currentSeg;
-            segmentIndicator.textContent = `${currentSeg + 1}/10`;
+            segmentIndicator.textContent = `${currentSeg}/10`;
             playNextSegment();
-        }, 6000);
+        }, segmentPlayTime * 1000);
     };
     
-    currentSegment = 0;
+    currentSegment = 1;
     segmentIndicator.textContent = '1/10';
     playNextSegment();
 }
@@ -377,10 +386,14 @@ function setupEventListeners() {
         progressBar.max = duration;
         durationEl.textContent = formatTime(duration);
         
-        if (browseMode && video.duration > 60) {
+        console.log('[BrowseMode] loadedmetadata, browseMode:', browseMode, 'duration:', video.duration);
+        
+        if (browseMode && video.duration > 300) {
             if (segmentTimeout) {
                 clearTimeout(segmentTimeout);
+                segmentTimeout = null;
             }
+            console.log('[BrowseMode] Starting segment playback from loadedmetadata');
             setTimeout(() => {
                 startSegmentPlayback(video.duration);
             }, 100);
@@ -388,11 +401,9 @@ function setupEventListeners() {
     });
     
     video.addEventListener('timeupdate', () => {
-        if (!browseMode) {
-            currentTime = video.currentTime;
-            progressBar.value = currentTime;
-            currentTimeEl.textContent = formatTime(currentTime);
-        }
+        currentTime = video.currentTime;
+        progressBar.value = currentTime;
+        currentTimeEl.textContent = formatTime(currentTime);
     });
     
     video.addEventListener('play', () => {
@@ -413,7 +424,7 @@ function setupEventListeners() {
         }
         
         if (browseMode) {
-            if (video.duration <= 60) {
+            if (video.duration <= 300) {
                 playNextVideo();
             }
             return;
@@ -688,12 +699,14 @@ function toggleVideoFitMode() {
 /**
  * 切换分段浏览模式
  * 
- * 开启后将视频分成10段快速预览，每段播放6秒。
+ * 开启后将超过5分钟的视频分成10段快速预览，每段播放视频总时长的十分之一。
  * 关闭后恢复正常播放模式。
  */
 function toggleBrowseMode() {
     browseMode = !browseMode;
     browseModeBtn.classList.toggle('active', browseMode);
+    
+    console.log('[BrowseMode] Toggle browse mode:', browseMode, 'video duration:', video.duration);
     
     if (browseMode) {
         segmentIndicator.style.display = 'inline';
@@ -701,15 +714,19 @@ function toggleBrowseMode() {
         segmentIndicator.style.display = 'none';
     }
     
-    currentSegment = 0;
+    currentSegment = 1;
     
     if (segmentTimeout) {
         clearTimeout(segmentTimeout);
+        segmentTimeout = null;
     }
     
-    if (browseMode && video.duration > 60) {
+    if (browseMode && video.duration && video.duration > 300) {
+        console.log('[BrowseMode] Starting segment playback from toggle');
         video.currentTime = 0;
         currentTime = 0;
+        progressBar.value = 0;
+        currentTimeEl.textContent = formatTime(0);
         if (video.paused) {
             video.play().catch(() => {});
         }
