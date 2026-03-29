@@ -86,6 +86,8 @@ class VideoImporterCLI:
         '_HTW': ('袜子类型', '黑色小腿袜'),
         '_HSW': ('袜子类型', '黑丝'),
         '_RSW': ('袜子类型', '肉丝'),
+        '_JS': ('拘束类型', '拘束'),
+        '_FPP': ('视角', '第一人称'),
     }
     
     def __init__(self, db_url: Optional[str] = None):

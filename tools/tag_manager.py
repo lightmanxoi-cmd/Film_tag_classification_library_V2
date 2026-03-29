@@ -1,42 +1,22 @@
 """
-视频数据库标签管理脚本
+标签管理工具
 
-本模块提供标签的全面管理功能，包括：
-- 标签创建：创建一级和二级标签
-- 标签删除：删除标签（支持强制删除）
-- 标签重命名：修改标签名称
-- 标签层级变更：调整标签的父子关系
-- 标签合并：将一个标签合并到另一个标签
-- 标签信息查看：查看标签详情和统计信息
-- 视频标签管理：为视频添加、移除、设置标签
-
-标签体系说明：
-- 一级标签：主要分类标签（如：电影、电视剧、纪录片等）
-- 二级标签：子分类标签（如：动作、喜剧、科幻等）
-- 每个二级标签必须属于一个一级标签
+本模块提供交互式控制台工具，用于管理视频数据库中的标签。
+支持以下功能：
+- 查看标签：显示所有标签的树形结构
+- 创建标签：创建一级标签或二级标签
+- 删除标签：删除标签（需先处理子标签和关联）
+- 重命名标签：修改标签名称
+- 修改层级：将二级标签提升为一级标签，或将一级标签降为二级标签
+- 合并标签：将一个标签合并到另一个标签
 
 使用方式：
-    创建标签：
-        python tools/tag_manager.py create "动作" --desc "动作类型视频"
-        python tools/tag_manager.py create "武侠" --parent 1
-        python tools/tag_manager.py create "武侠" --parent-name "动作"
-    
-    删除标签：
-        python tools/tag_manager.py delete 5
-        python tools/tag_manager.py delete 5 --force
-    
-    查看标签：
-        python tools/tag_manager.py list --tree
-        python tools/tag_manager.py info 5
-    
-    视频标签操作：
-        python tools/tag_manager.py video-add 1 2
-        python tools/tag_manager.py video-tags 1
+    python tools/tag_manager.py
+    python tools/tag_manager.py /path/to/database.db
 
 作者：Video Library System
 创建时间：2024
 """
-import argparse
 import sys
 import os
 
@@ -45,957 +25,845 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import Optional, List
 
 from video_tag_system import DatabaseManager
-from video_tag_system.models.tag import TagCreate, TagUpdate, TagMergeRequest
-from video_tag_system.models.video_tag import BatchTagOperation
 from video_tag_system.services import TagService, VideoTagService
-from video_tag_system.repositories import VideoRepository, TagRepository
+from video_tag_system.repositories import TagRepository, VideoTagRepository
+from video_tag_system.models.tag import TagCreate, TagUpdate, TagMergeRequest
 from video_tag_system.exceptions import (
     TagNotFoundError,
     DuplicateTagError,
     ValidationError,
     TagMergeError,
-    VideoNotFoundError,
 )
 
 
-class TagManagerCLI:
+class TagManager:
     """
-    标签管理命令行工具类
+    标签管理器类
     
-    提供标签管理的核心功能，支持命令行和交互式操作。
+    提供标签管理的核心功能，包括创建、删除、修改、合并标签等操作。
     
     属性：
         db_manager: 数据库管理器实例
-    
-    使用示例：
-        manager = TagManagerCLI()
-        manager.create_tag("动作", description="动作类型视频")
-        manager.list_tags(show_tree=True)
     """
     
     def __init__(self, db_url: Optional[str] = None):
         """
-        初始化标签管理工具
+        初始化标签管理器
         
         Args:
-            db_url: 数据库连接字符串，默认为None（使用配置文件设置）
+            db_url: 数据库连接字符串，默认为当前目录下的video_library.db
         """
-        self.db_manager = DatabaseManager(database_url=db_url, echo=False)
+        self.db_manager = DatabaseManager(database_url=db_url or "sqlite:///./video_library.db", echo=False)
         self.db_manager.create_tables()
     
-    def create_tag(
-        self,
-        name: str,
-        parent_id: Optional[int] = None,
-        parent_name: Optional[str] = None,
-        description: Optional[str] = None,
-        sort_order: int = 0
-    ) -> None:
+    def get_tag_tree(self) -> List[dict]:
+        """
+        获取标签树结构
+        
+        Returns:
+            标签字典列表，按层级组织
+        """
+        with self.db_manager.get_session() as session:
+            tag_service = TagService(session)
+            tag_tree = tag_service.get_tag_tree()
+            
+            result = []
+            for root_tag in tag_tree.items:
+                tag_info = {
+                    "id": root_tag.id,
+                    "name": root_tag.name,
+                    "level": 1,
+                    "parent_id": None,
+                    "parent_name": None,
+                    "video_count": self._get_tag_video_count(session, root_tag.id),
+                    "children_count": len(root_tag.children),
+                    "children": []
+                }
+                for child in root_tag.children:
+                    tag_info["children"].append({
+                        "id": child.id,
+                        "name": child.name,
+                        "level": 2,
+                        "parent_id": root_tag.id,
+                        "parent_name": root_tag.name,
+                        "video_count": self._get_tag_video_count(session, child.id),
+                        "children_count": 0,
+                        "children": []
+                    })
+                result.append(tag_info)
+            return result
+    
+    def _get_tag_video_count(self, session, tag_id: int) -> int:
+        """
+        获取标签关联的视频数量
+        
+        Args:
+            session: 数据库会话
+            tag_id: 标签ID
+            
+        Returns:
+            视频数量
+        """
+        video_tag_repo = VideoTagRepository(session)
+        return video_tag_repo.count_by_tag(tag_id)
+    
+    def get_all_tags_flat(self) -> List[dict]:
+        """
+        获取所有标签的扁平列表
+        
+        Returns:
+            标签字典列表
+        """
+        with self.db_manager.get_session() as session:
+            tag_service = TagService(session)
+            tag_tree = tag_service.get_tag_tree()
+            
+            result = []
+            for root_tag in tag_tree.items:
+                result.append({
+                    "id": root_tag.id,
+                    "name": root_tag.name,
+                    "level": 1,
+                    "parent_id": None,
+                    "parent_name": None,
+                    "video_count": self._get_tag_video_count(session, root_tag.id),
+                    "children_count": len(root_tag.children)
+                })
+                for child in root_tag.children:
+                    result.append({
+                        "id": child.id,
+                        "name": child.name,
+                        "level": 2,
+                        "parent_id": root_tag.id,
+                        "parent_name": root_tag.name,
+                        "video_count": self._get_tag_video_count(session, child.id),
+                        "children_count": 0
+                    })
+            return result
+    
+    def create_tag(self, name: str, parent_id: Optional[int] = None) -> dict:
         """
         创建标签
         
-        创建一级或二级标签。可以通过parent_id或parent_name指定父标签。
-        
         Args:
             name: 标签名称
-            parent_id: 父标签ID（创建二级标签时使用）
-            parent_name: 父标签名称（创建二级标签时使用，与parent_id互斥）
-            description: 标签描述
-            sort_order: 排序顺序，默认为0
+            parent_id: 父标签ID（创建二级标签时需要）
+            
+        Returns:
+            操作结果字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
-            
-            if parent_name is not None:
-                if parent_id is not None:
-                    print("✗ 错误: 不能同时指定 --parent 和 --parent-name")
-                    sys.exit(1)
-                
-                try:
-                    parent_tag = tag_service.get_tag_by_name(parent_name, parent_id=None)
-                    parent_id = parent_tag.id
-                except TagNotFoundError:
-                    print(f"✗ 错误: 父标签不存在 (名称: '{parent_name}')")
-                    sys.exit(1)
-            
-            tag_data = TagCreate(
-                name=name,
-                parent_id=parent_id,
-                description=description,
-                sort_order=sort_order
-            )
-            
             try:
+                tag_data = TagCreate(name=name, parent_id=parent_id)
                 tag = tag_service.create_tag(tag_data)
-                level = "一级" if tag.parent_id is None else "二级"
-                print(f"✓ 成功创建{level}标签: {tag.name} (ID: {tag.id})")
-                if tag.parent_id:
-                    print(f"  父标签ID: {tag.parent_id}")
-                if tag.description:
-                    print(f"  描述: {tag.description}")
-            except TagNotFoundError as e:
-                print(f"✗ 错误: 父标签不存在 (ID: {e.details.get('tag_id')})")
-                sys.exit(1)
-            except DuplicateTagError as e:
-                parent_info = f" (父标签ID: {e.details.get('parent_id')})" if e.details.get('parent_id') else ""
-                print(f"✗ 错误: 标签 '{e.details.get('tag_name')}' 已存在{parent_info}")
-                sys.exit(1)
-            except ValidationError as e:
-                print(f"✗ 验证错误: {e.message}")
-                sys.exit(1)
+                session.commit()
+                return {
+                    "success": True,
+                    "tag": {
+                        "id": tag.id,
+                        "name": tag.name,
+                        "parent_id": tag.parent_id,
+                        "level": tag.level
+                    }
+                }
+            except (TagNotFoundError, DuplicateTagError, ValidationError) as e:
+                return {"success": False, "error": str(e)}
     
-    def delete_tag(self, tag_id: int, force: bool = False) -> None:
+    def delete_tag(self, tag_id: int) -> dict:
         """
         删除标签
         
-        删除指定标签。如果标签有子标签则无法删除。
-        如果标签关联了视频，需要使用--force参数强制删除。
-        
         Args:
-            tag_id: 要删除的标签ID
-            force: 是否强制删除（删除关联关系）
+            tag_id: 标签ID
+            
+        Returns:
+            操作结果字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
+            video_tag_repo = VideoTagRepository(session)
             
             try:
+                video_count = video_tag_repo.count_by_tag(tag_id)
                 tag = tag_service.get_tag(tag_id)
-                print(f"标签信息: {tag.name} (ID: {tag.id})")
-                print(f"  层级: {'一级' if tag.level == 1 else '二级'}")
+                children_count = len(tag.children) if tag.children else 0
                 
-                stats = tag_service.get_tag_statistics(tag_id)
-                print(f"  关联视频数: {stats['video_count']}")
-                print(f"  子标签数: {stats['children_count']}")
-                
-                if stats['children_count'] > 0:
-                    print(f"✗ 错误: 该标签下有 {stats['children_count']} 个子标签，请先删除子标签")
-                    sys.exit(1)
-                
-                if stats['video_count'] > 0 and not force:
-                    print(f"⚠ 警告: 该标签关联了 {stats['video_count']} 个视频")
-                    print("  使用 --force 参数强制删除")
-                    sys.exit(1)
-                
-                if force and stats['video_count'] > 0:
-                    print("⚠ 警告: 强制删除将移除所有视频关联")
-                
-                confirm = input(f"\n确认删除标签 '{tag.name}'? (yes/no): ")
-                if confirm.lower() not in ['yes', 'y']:
-                    print("操作已取消")
-                    return
+                if children_count > 0:
+                    return {
+                        "success": False,
+                        "error": f"该标签下有 {children_count} 个子标签，请先删除或移动子标签"
+                    }
                 
                 tag_service.delete_tag(tag_id)
-                print(f"✓ 成功删除标签: {tag.name}")
-                
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
+                session.commit()
+                return {
+                    "success": True,
+                    "deleted_video_relations": video_count
+                }
+            except TagNotFoundError as e:
+                return {"success": False, "error": str(e)}
             except ValidationError as e:
-                print(f"✗ 验证错误: {e.message}")
-                sys.exit(1)
+                return {"success": False, "error": str(e)}
     
-    def rename_tag(self, tag_id: int, new_name: str) -> None:
+    def rename_tag(self, tag_id: int, new_name: str) -> dict:
         """
         重命名标签
         
-        修改标签的名称。新名称在同一父标签下不能重复。
-        
         Args:
             tag_id: 标签ID
-            new_name: 新的标签名称
+            new_name: 新名称
+            
+        Returns:
+            操作结果字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
-            
             try:
-                tag = tag_service.get_tag(tag_id)
-                print(f"当前标签: {tag.name} (ID: {tag.id})")
-                
-                update_data = TagUpdate(name=new_name)
-                updated_tag = tag_service.update_tag(tag_id, update_data)
-                
-                print(f"✓ 成功重命名标签: '{tag.name}' -> '{updated_tag.name}'")
-                
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
-            except DuplicateTagError as e:
-                print(f"✗ 错误: 标签名称 '{e.tag_name}' 已存在")
-                sys.exit(1)
-            except ValidationError as e:
-                print(f"✗ 验证错误: {e.message}")
-                sys.exit(1)
+                tag_data = TagUpdate(name=new_name)
+                tag = tag_service.update_tag(tag_id, tag_data)
+                session.commit()
+                return {
+                    "success": True,
+                    "tag": {
+                        "id": tag.id,
+                        "name": tag.name,
+                        "parent_id": tag.parent_id,
+                        "level": tag.level
+                    }
+                }
+            except (TagNotFoundError, DuplicateTagError, ValidationError) as e:
+                return {"success": False, "error": str(e)}
     
-    def move_tag(self, tag_id: int, new_parent_id: Optional[int]) -> None:
+    def change_parent(self, tag_id: int, new_parent_id: Optional[int]) -> dict:
         """
-        改变标签层级
-        
-        将标签移动到新的父标签下，或提升为一级标签。
-        注意：只能将标签移动到一级标签下。
+        修改标签的父标签（改变层级）
         
         Args:
-            tag_id: 要移动的标签ID
+            tag_id: 要修改的标签ID
             new_parent_id: 新的父标签ID，None表示提升为一级标签
+            
+        Returns:
+            操作结果字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
+            tag_repo = TagRepository(session)
             
             try:
-                tag = tag_service.get_tag(tag_id)
-                old_level = "一级" if tag.level == 1 else "二级"
-                old_parent = f" (父标签ID: {tag.parent_id})" if tag.parent_id else ""
+                tag = tag_repo.get_by_id(tag_id)
+                if not tag:
+                    return {"success": False, "error": f"标签ID {tag_id} 不存在"}
                 
-                print(f"当前标签: {tag.name} (ID: {tag.id})")
-                print(f"  当前层级: {old_level}{old_parent}")
+                old_parent_id = tag.parent_id
+                old_level = tag.level
                 
-                if new_parent_id:
-                    parent_tag = tag_service.get_tag(new_parent_id)
-                    if parent_tag.level != 1:
-                        print(f"✗ 错误: 父标签必须是一级标签")
-                        sys.exit(1)
-                    new_level_info = f"二级标签 (父标签: {parent_tag.name})"
-                else:
-                    new_level_info = "一级标签"
+                if new_parent_id == tag_id:
+                    return {"success": False, "error": "标签不能以自己为父标签"}
                 
-                print(f"  目标层级: {new_level_info}")
+                if new_parent_id is not None:
+                    new_parent = tag_repo.get_by_id(new_parent_id)
+                    if not new_parent:
+                        return {"success": False, "error": f"父标签ID {new_parent_id} 不存在"}
+                    if new_parent.parent_id is not None:
+                        return {"success": False, "error": "不支持超过两级的标签结构，目标父标签必须是一级标签"}
                 
-                update_data = TagUpdate(parent_id=new_parent_id)
-                updated_tag = tag_service.update_tag(tag_id, update_data)
+                children_count = tag_repo.count_children(tag_id)
+                if children_count > 0 and new_parent_id is not None:
+                    return {"success": False, "error": f"该标签有 {children_count} 个子标签，不能变为二级标签"}
                 
-                new_level = "一级" if updated_tag.level == 1 else "二级"
-                new_parent_info = f" (父标签ID: {updated_tag.parent_id})" if updated_tag.parent_id else ""
+                tag_data = TagUpdate(parent_id=new_parent_id)
+                updated_tag = tag_service.update_tag(tag_id, tag_data)
+                session.commit()
                 
-                print(f"✓ 成功改变标签层级: {old_level} -> {new_level}{new_parent_info}")
+                new_level = 1 if new_parent_id is None else 2
+                action = "提升为一级标签" if new_parent_id is None else "降为二级标签"
                 
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在")
-                sys.exit(1)
-            except ValidationError as e:
-                print(f"✗ 验证错误: {e.message}")
-                sys.exit(1)
+                return {
+                    "success": True,
+                    "tag": {
+                        "id": updated_tag.id,
+                        "name": updated_tag.name,
+                        "parent_id": updated_tag.parent_id,
+                        "level": new_level
+                    },
+                    "old_level": old_level,
+                    "new_level": new_level,
+                    "action": action
+                }
+            except (TagNotFoundError, ValidationError) as e:
+                return {"success": False, "error": str(e)}
     
-    def update_tag(
-        self,
-        tag_id: int,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        sort_order: Optional[int] = None
-    ) -> None:
-        """
-        更新标签信息
-        
-        更新标签的名称、描述或排序顺序。
-        
-        Args:
-            tag_id: 标签ID
-            name: 新名称（可选）
-            description: 新描述（可选）
-            sort_order: 新排序（可选）
-        """
-        with self.db_manager.get_session() as session:
-            tag_service = TagService(session)
-            
-            try:
-                tag = tag_service.get_tag(tag_id)
-                print(f"当前标签: {tag.name} (ID: {tag.id})")
-                
-                update_kwargs = {}
-                if name is not None:
-                    update_kwargs['name'] = name
-                if description is not None:
-                    update_kwargs['description'] = description
-                if sort_order is not None:
-                    update_kwargs['sort_order'] = sort_order
-                
-                if not update_kwargs:
-                    print("✓ 标签信息无变化")
-                    return
-                
-                update_data = TagUpdate(**update_kwargs)
-                updated_tag = tag_service.update_tag(tag_id, update_data)
-                
-                changes = []
-                if 'name' in update_kwargs and name != tag.name:
-                    changes.append(f"名称: '{tag.name}' -> '{updated_tag.name}'")
-                if 'description' in update_kwargs:
-                    old_desc = tag.description or "无"
-                    new_desc = updated_tag.description or "无"
-                    changes.append(f"描述: '{old_desc}' -> '{new_desc}'")
-                if 'sort_order' in update_kwargs:
-                    changes.append(f"排序: {tag.sort_order} -> {updated_tag.sort_order}")
-                
-                if changes:
-                    print("✓ 成功更新标签:")
-                    for change in changes:
-                        print(f"  - {change}")
-                else:
-                    print("✓ 标签信息无变化")
-                
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
-            except ValidationError as e:
-                print(f"✗ 验证错误: {e.message}")
-                sys.exit(1)
-    
-    def merge_tags(self, source_id: int, target_id: int) -> None:
+    def merge_tags(self, source_id: int, target_id: int) -> dict:
         """
         合并标签
         
         将源标签的所有视频关联转移到目标标签，然后删除源标签。
-        用于清理重复标签或整合标签。
         
         Args:
             source_id: 源标签ID（将被删除）
-            target_id: 目标标签ID（将保留）
+            target_id: 目标标签ID
+            
+        Returns:
+            操作结果字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
-            
             try:
-                source_tag = tag_service.get_tag(source_id)
-                target_tag = tag_service.get_tag(target_id)
-                
-                print(f"源标签: {source_tag.name} (ID: {source_tag.id})")
-                print(f"目标标签: {target_tag.name} (ID: {target_tag.id})")
-                
-                source_stats = tag_service.get_tag_statistics(source_id)
-                print(f"源标签关联视频数: {source_stats['video_count']}")
-                
-                merge_data = TagMergeRequest(
-                    source_tag_id=source_id,
-                    target_tag_id=target_id
-                )
-                
+                merge_data = TagMergeRequest(source_tag_id=source_id, target_tag_id=target_id)
                 result = tag_service.merge_tags(merge_data)
-                
-                print(f"✓ 成功合并标签:")
-                print(f"  - 转移关联关系: {result['transferred_relations']} 条")
-                print(f"  - 删除源标签: {result['deleted_source_tag']}")
-                
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在")
-                sys.exit(1)
-            except TagMergeError as e:
-                print(f"✗ 合并错误: {e.message}")
-                sys.exit(1)
+                session.commit()
+                return {
+                    "success": True,
+                    "transferred_relations": result["transferred_relations"],
+                    "source_tag_id": source_id,
+                    "target_tag_id": target_id
+                }
+            except (TagNotFoundError, TagMergeError) as e:
+                return {"success": False, "error": str(e)}
     
-    def list_tags(
-        self,
-        parent_id: Optional[int] = None,
-        search: Optional[str] = None,
-        show_tree: bool = False
-    ) -> None:
+    def get_tag_statistics(self) -> dict:
         """
-        列出标签
+        获取标签统计信息
         
-        以列表或树形结构显示标签。
-        
-        Args:
-            parent_id: 只显示指定父标签的子标签
-            search: 搜索关键词
-            show_tree: 是否以树形结构显示
+        Returns:
+            统计信息字典
         """
         with self.db_manager.get_session() as session:
             tag_service = TagService(session)
+            tag_repo = TagRepository(session)
             
-            if show_tree:
-                self._show_tag_tree(tag_service)
-            else:
-                self._show_tag_list(tag_service, parent_id, search)
+            total_tags = tag_service.count_tags()
+            root_tags = tag_repo.list_root_tags()
+            level1_count = len(root_tags)
+            level2_count = total_tags - level1_count
+            
+            return {
+                "total_tags": total_tags,
+                "level1_count": level1_count,
+                "level2_count": level2_count
+            }
+
+
+def clear_screen():
+    """清屏函数"""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+def print_separator(char='-', length=60):
+    """打印分隔线"""
+    print(char * length)
+
+
+def show_tag_tree(manager: TagManager):
+    """显示标签树"""
+    tags = manager.get_tag_tree()
+    stats = manager.get_tag_statistics()
     
-    def _show_tag_tree(self, tag_service: TagService) -> None:
-        """
-        显示标签树
-        
-        以树形结构显示所有标签，一级标签为根节点，
-        二级标签为子节点。
-        
-        Args:
-            tag_service: 标签服务实例
-        """
-        tag_tree = tag_service.get_tag_tree()
-        total = tag_tree.total
-        
-        print(f"\n标签树 (共 {total} 个标签):\n")
-        
-        for root_tag in tag_tree.items:
-            self._print_tag_node(root_tag, 0)
-        
-        if total == 0:
-            print("  (暂无标签)")
+    print("\n" + "=" * 60)
+    print("  标签列表（树形结构）")
+    print("=" * 60)
+    print(f"  总计: {stats['total_tags']} 个标签 (一级: {stats['level1_count']}, 二级: {stats['level2_count']})")
+    print_separator()
     
-    def _print_tag_node(self, tag, level: int) -> None:
-        """
-        递归打印标签节点
-        
-        以缩进方式打印标签及其子标签。
-        
-        Args:
-            tag: 标签对象
-            level: 当前层级（用于缩进）
-        """
-        indent = "  " * level
-        level_str = f"[{tag.level}级]" if tag.level else ""
-        video_count_str = f"({tag.video_count}个视频)" if hasattr(tag, 'video_count') else ""
-        
-        print(f"{indent}├─ {tag.name} (ID:{tag.id}) {level_str} {video_count_str}")
-        if tag.description:
-            print(f"{indent}│  描述: {tag.description}")
-        
-        for child in tag.children:
-            self._print_tag_node(child, level + 1)
+    if not tags:
+        print("  暂无标签")
+        print_separator()
+        return
     
-    def _show_tag_list(
-        self,
-        tag_service: TagService,
-        parent_id: Optional[int],
-        search: Optional[str]
-    ) -> None:
-        """
-        显示标签列表
+    for tag in tags:
+        video_info = f"({tag['video_count']}视频)"
+        children_info = f"[{tag['children_count']}子标签]" if tag['children_count'] > 0 else ""
+        print(f"  [{tag['id']}] {tag['name']} {video_info} {children_info}")
         
-        以列表形式显示标签，支持按父标签筛选和搜索。
-        
-        Args:
-            tag_service: 标签服务实例
-            parent_id: 父标签ID筛选
-            search: 搜索关键词
-        """
-        if parent_id:
-            parent = tag_service.get_tag(parent_id)
-            print(f"\n标签列表 (父标签: {parent.name}):\n")
-        elif search:
-            print(f"\n标签列表 (搜索: '{search}'):\n")
-        else:
-            print(f"\n标签列表:\n")
-        
-        result = tag_service.list_tags(page=1, page_size=100, parent_id=parent_id, search=search)
-        
-        if not result['items']:
-            print("  (暂无标签)")
+        for child in tag.get("children", []):
+            child_video_info = f"({child['video_count']}视频)"
+            print(f"      └─ [{child['id']}] {child['name']} {child_video_info}")
+    
+    print_separator()
+
+
+def create_tag_flow(manager: TagManager):
+    """创建标签流程"""
+    print("\n" + "=" * 60)
+    print("  创建标签")
+    print("=" * 60)
+    
+    name = input("\n请输入标签名称: ").strip()
+    if not name:
+        print("标签名称不能为空")
+        return
+    
+    print("\n选择标签类型:")
+    print("  [1] 一级标签")
+    print("  [2] 二级标签")
+    print("  [0] 取消")
+    
+    choice = input("\n请选择: ").strip()
+    
+    if choice == "0":
+        return
+    
+    parent_id = None
+    
+    if choice == "2":
+        tags = manager.get_tag_tree()
+        if not tags:
+            print("\n没有一级标签，请先创建一级标签")
             return
         
-        for tag in result['items']:
-            level_str = "一级" if tag.level == 1 else "二级"
-            parent_str = f" (父ID: {tag.parent_id})" if tag.parent_id else ""
-            desc_str = f" - {tag.description}" if tag.description else ""
-            
-            print(f"  [{tag.id}] {tag.name} ({level_str}){parent_str}{desc_str}")
+        print("\n选择父标签:")
+        print_separator()
+        for i, tag in enumerate(tags, 1):
+            print(f"  [{i}] {tag['name']}")
+        print_separator()
+        print("  [0] 取消")
         
-        print(f"\n总计: {result['total']} 个标签")
-    
-    def show_tag_info(self, tag_id: int) -> None:
-        """
-        显示标签详细信息
+        parent_choice = input("\n请选择父标签编号: ").strip()
+        if parent_choice == "0":
+            return
         
-        显示标签的完整信息，包括：
-        - 基本信息（ID、名称、层级、描述等）
-        - 统计信息（关联视频数、子标签数）
-        - 子标签列表
-        
-        Args:
-            tag_id: 标签ID
-        """
-        with self.db_manager.get_session() as session:
-            tag_service = TagService(session)
-            
-            try:
-                tag = tag_service.get_tag(tag_id)
-                stats = tag_service.get_tag_statistics(tag_id)
-                
-                print(f"\n标签详细信息:\n")
-                print(f"  ID: {tag.id}")
-                print(f"  名称: {tag.name}")
-                print(f"  层级: {'一级' if tag.level == 1 else '二级'}")
-                if tag.parent_id:
-                    print(f"  父标签ID: {tag.parent_id}")
-                if tag.description:
-                    print(f"  描述: {tag.description}")
-                print(f"  排序: {tag.sort_order}")
-                print(f"  创建时间: {tag.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"  更新时间: {tag.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"  关联视频数: {stats['video_count']}")
-                print(f"  子标签数: {stats['children_count']}")
-                
-                if tag.children:
-                    print(f"\n  子标签:")
-                    for child in tag.children:
-                        print(f"    - {child.name} (ID: {child.id})")
-                
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
-    
-    def list_videos(self, tag_ids: Optional[List[int]] = None) -> None:
-        """
-        列出视频
-        
-        列出所有视频或指定标签的视频。
-        
-        Args:
-            tag_ids: 标签ID列表，用于筛选视频
-        """
-        with self.db_manager.get_session() as session:
-            video_repo = VideoRepository(session)
-            video_tag_service = VideoTagService(session)
-            
-            if tag_ids:
-                video_ids = video_tag_service.get_videos_by_tags(tag_ids, match_all=False)
-                videos = [video_repo.get_by_id(vid) for vid in video_ids]
-                videos = [v for v in videos if v is not None]
-                print(f"\n视频列表 (标签: {tag_ids}):\n")
+        try:
+            idx = int(parent_choice) - 1
+            if 0 <= idx < len(tags):
+                parent_id = tags[idx]["id"]
             else:
-                videos = video_repo.list_all(page=1, page_size=50)[0]
-                print(f"\n视频列表:\n")
-            
-            if not videos:
-                print("  (暂无视频)")
+                print("无效的选择")
                 return
-            
-            for video in videos:
-                tags = video_tag_service.get_video_tags(video.id)
-                tag_names = [t.name for t in tags]
-                print(f"  [{video.id}] {video.title}")
-                print(f"      路径: {video.file_path}")
-                if tag_names:
-                    print(f"      标签: {', '.join(tag_names)}")
-                print()
+        except ValueError:
+            print("请输入有效的数字")
+            return
     
-    def add_video_tag(self, video_id: int, tag_id: int) -> None:
-        """
-        为视频添加标签
-        
-        Args:
-            video_id: 视频ID
-            tag_id: 标签ID
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                result = video_tag_service.add_tag_to_video(video_id, tag_id)
-                if result['added']:
-                    print(f"✓ 成功为视频 {video_id} 添加标签 {tag_id}")
-                else:
-                    print(f"✓ 视频 {video_id} 已有标签 {tag_id}")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在 (ID: {video_id})")
-                sys.exit(1)
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
+    result = manager.create_tag(name, parent_id)
     
-    def remove_video_tag(self, video_id: int, tag_id: int) -> None:
-        """
-        从视频移除标签
-        
-        Args:
-            video_id: 视频ID
-            tag_id: 标签ID
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                result = video_tag_service.remove_tag_from_video(video_id, tag_id)
-                if result['removed']:
-                    print(f"✓ 成功从视频 {video_id} 移除标签 {tag_id}")
-                else:
-                    print(f"✓ 视频 {video_id} 没有标签 {tag_id}")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在 (ID: {video_id})")
-                sys.exit(1)
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在 (ID: {tag_id})")
-                sys.exit(1)
+    if result["success"]:
+        tag = result["tag"]
+        level_str = "一级" if tag["level"] == 1 else "二级"
+        print(f"\n✓ 成功创建{level_str}标签: {tag['name']} (ID: {tag['id']})")
+    else:
+        print(f"\n✗ 创建失败: {result['error']}")
+
+
+def delete_tag_flow(manager: TagManager):
+    """删除标签流程"""
+    tags = manager.get_tag_tree()
     
-    def set_video_tags(self, video_id: int, tag_ids: List[int]) -> None:
-        """
-        设置视频的标签（替换现有标签）
-        
-        将视频的标签设置为指定的标签列表，移除不在列表中的标签。
-        
-        Args:
-            video_id: 视频ID
-            tag_ids: 标签ID列表
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                result = video_tag_service.set_video_tags(video_id, tag_ids)
-                print(f"✓ 成功设置视频 {video_id} 的标签:")
-                print(f"  - 添加了 {result['tags_added']} 个标签")
-                print(f"  - 移除了 {result['tags_removed']} 个标签")
-                print(f"  - 当前共有 {result['current_tag_count']} 个标签")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在 (ID: {video_id})")
-                sys.exit(1)
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在")
-                sys.exit(1)
+    if not tags:
+        print("\n暂无标签可删除")
+        return
     
-    def batch_add_video_tags(
-        self,
-        video_ids: List[int],
-        tag_ids: List[int]
-    ) -> None:
-        """
-        批量为视频添加标签
-        
-        为多个视频批量添加多个标签。
-        
-        Args:
-            video_ids: 视频ID列表
-            tag_ids: 标签ID列表
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                operation = BatchTagOperation(
-                    video_ids=video_ids,
-                    tag_ids=tag_ids
-                )
-                result = video_tag_service.batch_add_tags(operation)
-                print(f"✓ {result['message']}")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在")
-                sys.exit(1)
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在")
-                sys.exit(1)
+    print("\n" + "=" * 60)
+    print("  删除标签")
+    print("=" * 60)
+    print("\n当前标签列表:")
+    print_separator()
     
-    def batch_remove_video_tags(
-        self,
-        video_ids: List[int],
-        tag_ids: List[int]
-    ) -> None:
-        """
-        批量从视频移除标签
-        
-        从多个视频批量移除多个标签。
-        
-        Args:
-            video_ids: 视频ID列表
-            tag_ids: 标签ID列表
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                operation = BatchTagOperation(
-                    video_ids=video_ids,
-                    tag_ids=tag_ids
-                )
-                result = video_tag_service.batch_remove_tags(operation)
-                print(f"✓ {result['message']}")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在")
-                sys.exit(1)
-            except TagNotFoundError:
-                print(f"✗ 错误: 标签不存在")
-                sys.exit(1)
+    all_tags = []
+    for tag in tags:
+        all_tags.append(tag)
+        print(f"  [{tag['id']}] {tag['name']} (一级, {tag['video_count']}视频, {tag['children_count']}子标签)")
+        for child in tag.get("children", []):
+            all_tags.append(child)
+            print(f"      └─ [{child['id']}] {child['name']} (二级, {child['video_count']}视频)")
     
-    def show_video_tags(self, video_id: int) -> None:
-        """
-        显示视频的所有标签
-        
-        Args:
-            video_id: 视频ID
-        """
-        with self.db_manager.get_session() as session:
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                tags = video_tag_service.get_video_tags(video_id)
-                print(f"\n视频 {video_id} 的标签:\n")
-                
-                if not tags:
-                    print("  (暂无标签)")
-                    return
-                
-                for tag in tags:
-                    level = "一级" if tag.level == 1 else "二级"
-                    parent_info = f" (父: {tag.parent_id})" if tag.parent_id else ""
-                    print(f"  - {tag.name} (ID: {tag.id}) [{level}]{parent_info}")
-                    if tag.description:
-                        print(f"      描述: {tag.description}")
-                
-                print(f"\n总计: {len(tags)} 个标签")
-            except VideoNotFoundError:
-                print(f"✗ 错误: 视频不存在 (ID: {video_id})")
-                sys.exit(1)
+    print_separator()
+    print("  [0] 取消")
+    print_separator()
     
-    def search_videos_by_tag(self, tag_name: str) -> None:
-        """
-        根据标签名称搜索视频
+    tag_id = input("\n请输入要删除的标签ID: ").strip()
+    
+    if tag_id == "0":
+        return
+    
+    try:
+        tag_id = int(tag_id)
+    except ValueError:
+        print("请输入有效的数字")
+        return
+    
+    tag_to_delete = None
+    for tag in all_tags:
+        if tag["id"] == tag_id:
+            tag_to_delete = tag
+            break
+    
+    if not tag_to_delete:
+        print(f"标签ID {tag_id} 不存在")
+        return
+    
+    print(f"\n将要删除标签: {tag_to_delete['name']}")
+    print(f"  - 关联视频数: {tag_to_delete['video_count']}")
+    print(f"  - 子标签数: {tag_to_delete['children_count']}")
+    
+    confirm = input("\n确认删除？(y/n): ").strip().lower()
+    if confirm != 'y':
+        print("已取消")
+        return
+    
+    result = manager.delete_tag(tag_id)
+    
+    if result["success"]:
+        print(f"\n✓ 删除成功")
+        if result.get("deleted_video_relations", 0) > 0:
+            print(f"  已移除 {result['deleted_video_relations']} 个视频关联")
+    else:
+        print(f"\n✗ 删除失败: {result['error']}")
+
+
+def rename_tag_flow(manager: TagManager):
+    """重命名标签流程"""
+    tags = manager.get_all_tags_flat()
+    
+    if not tags:
+        print("\n暂无标签可重命名")
+        return
+    
+    print("\n" + "=" * 60)
+    print("  重命名标签")
+    print("=" * 60)
+    print("\n当前标签列表:")
+    print_separator()
+    
+    for tag in tags:
+        level_str = "一级" if tag["level"] == 1 else f"二级[{tag['parent_name']}]"
+        print(f"  [{tag['id']}] {tag['name']} ({level_str})")
+    
+    print_separator()
+    print("  [0] 取消")
+    print_separator()
+    
+    tag_id = input("\n请输入要重命名的标签ID: ").strip()
+    
+    if tag_id == "0":
+        return
+    
+    try:
+        tag_id = int(tag_id)
+    except ValueError:
+        print("请输入有效的数字")
+        return
+    
+    tag_to_rename = None
+    for tag in tags:
+        if tag["id"] == tag_id:
+            tag_to_rename = tag
+            break
+    
+    if not tag_to_rename:
+        print(f"标签ID {tag_id} 不存在")
+        return
+    
+    print(f"\n当前名称: {tag_to_rename['name']}")
+    new_name = input("请输入新名称: ").strip()
+    
+    if not new_name:
+        print("标签名称不能为空")
+        return
+    
+    if new_name == tag_to_rename['name']:
+        print("新名称与原名称相同，无需修改")
+        return
+    
+    result = manager.rename_tag(tag_id, new_name)
+    
+    if result["success"]:
+        print(f"\n✓ 重命名成功: {tag_to_rename['name']} -> {new_name}")
+    else:
+        print(f"\n✗ 重命名失败: {result['error']}")
+
+
+def change_level_flow(manager: TagManager):
+    """修改标签层级流程"""
+    tags = manager.get_tag_tree()
+    
+    if not tags:
+        print("\n暂无标签")
+        return
+    
+    print("\n" + "=" * 60)
+    print("  修改标签层级")
+    print("=" * 60)
+    print("\n说明:")
+    print("  - 提升: 将二级标签变为一级标签")
+    print("  - 降级: 将一级标签变为二级标签（需选择父标签）")
+    print("  注意: 有子标签的一级标签不能降级")
+    print_separator()
+    
+    all_tags = []
+    for tag in tags:
+        all_tags.append(tag)
+        for child in tag.get("children", []):
+            all_tags.append(child)
+    
+    print("\n当前标签列表:")
+    print_separator()
+    for tag in tags:
+        children_info = f"[{tag['children_count']}子标签]" if tag['children_count'] > 0 else ""
+        print(f"  [{tag['id']}] {tag['name']} (一级) {children_info}")
+        for child in tag.get("children", []):
+            print(f"      └─ [{child['id']}] {child['name']} (二级, 父: {tag['name']})")
+    
+    print_separator()
+    print("  [0] 取消")
+    print_separator()
+    
+    tag_id = input("\n请输入要修改的标签ID: ").strip()
+    
+    if tag_id == "0":
+        return
+    
+    try:
+        tag_id = int(tag_id)
+    except ValueError:
+        print("请输入有效的数字")
+        return
+    
+    selected_tag = None
+    for tag in all_tags:
+        if tag["id"] == tag_id:
+            selected_tag = tag
+            break
+    
+    if not selected_tag:
+        print(f"标签ID {tag_id} 不存在")
+        return
+    
+    if selected_tag["level"] == 2:
+        print(f"\n当前: 二级标签 [{selected_tag['parent_name']}/{selected_tag['name']}]")
+        print("操作: 提升为一级标签")
+        confirm = input("\n确认提升？(y/n): ").strip().lower()
+        if confirm == 'y':
+            result = manager.change_parent(tag_id, None)
+            if result["success"]:
+                print(f"\n✓ 提升成功: {selected_tag['name']} 现在是一级标签")
+            else:
+                print(f"\n✗ 提升失败: {result['error']}")
+        else:
+            print("已取消")
+    else:
+        if selected_tag["children_count"] > 0:
+            print(f"\n该标签有 {selected_tag['children_count']} 个子标签，不能降级")
+            print("请先删除或移动子标签")
+            return
         
-        查找具有指定标签的所有视频。
+        print(f"\n当前: 一级标签 [{selected_tag['name']}]")
+        print("选择新的父标签:")
+        print_separator()
         
-        Args:
-            tag_name: 标签名称
-        """
-        with self.db_manager.get_session() as session:
-            tag_service = TagService(session)
-            video_tag_service = VideoTagService(session)
-            
-            try:
-                tag = tag_service.get_tag_by_name(tag_name, parent_id=None)
-            except TagNotFoundError:
-                try:
-                    tag_repo = TagRepository(session)
-                    tag = tag_repo.get_by_name_and_parent(tag_name, parent_id=None)
-                    if not tag:
-                        from sqlalchemy import select
-                        from video_tag_system.models.tag import Tag
-                        stmt = select(Tag).where(Tag.name == tag_name)
-                        tag = session.execute(stmt).scalar_one_or_none()
-                        if not tag:
-                            raise TagNotFoundError(tag_name=tag_name)
-                except TagNotFoundError:
-                    print(f"✗ 错误: 标签不存在 (名称: '{tag_name}')")
-                    sys.exit(1)
-            
-            video_ids = video_tag_service.get_videos_by_tags([tag.id], match_all=False)
-            
-            print(f"\n标签 '{tag_name}' (ID: {tag.id}) 关联的视频:\n")
-            
-            if not video_ids:
-                print("  (暂无视频)")
+        root_tags = [t for t in tags if t["id"] != tag_id]
+        if not root_tags:
+            print("没有其他一级标签可作为父标签")
+            return
+        
+        for i, tag in enumerate(root_tags, 1):
+            print(f"  [{i}] {tag['name']}")
+        print_separator()
+        print("  [0] 取消")
+        
+        parent_choice = input("\n请选择父标签编号: ").strip()
+        if parent_choice == "0":
+            return
+        
+        try:
+            idx = int(parent_choice) - 1
+            if 0 <= idx < len(root_tags):
+                new_parent_id = root_tags[idx]["id"]
+                new_parent_name = root_tags[idx]["name"]
+            else:
+                print("无效的选择")
                 return
-            
-            video_repo = VideoRepository(session)
-            for video_id in video_ids:
-                video = video_repo.get_by_id(video_id)
-                if video:
-                    print(f"  [{video.id}] {video.title}")
-                    print(f"      路径: {video.file_path}")
-                    print()
-            
-            print(f"总计: {len(video_ids)} 个视频")
-    
-    def close(self) -> None:
-        """
-        关闭数据库连接
+        except ValueError:
+            print("请输入有效的数字")
+            return
         
-        释放数据库资源。
-        """
-        self.db_manager.close()
+        confirm = input(f"\n确认将 '{selected_tag['name']}' 降为 '{new_parent_name}' 的子标签？(y/n): ").strip().lower()
+        if confirm == 'y':
+            result = manager.change_parent(tag_id, new_parent_id)
+            if result["success"]:
+                print(f"\n✓ 降级成功: {selected_tag['name']} 现在是 {new_parent_name} 的子标签")
+            else:
+                print(f"\n✗ 降级失败: {result['error']}")
+        else:
+            print("已取消")
+
+
+def merge_tags_flow(manager: TagManager):
+    """合并标签流程"""
+    tags = manager.get_all_tags_flat()
+    
+    if len(tags) < 2:
+        print("\n至少需要2个标签才能合并")
+        return
+    
+    print("\n" + "=" * 60)
+    print("  合并标签")
+    print("=" * 60)
+    print("\n说明:")
+    print("  将源标签的所有视频关联转移到目标标签，然后删除源标签")
+    print("  注意: 只能合并同级标签")
+    print_separator()
+    
+    print("\n当前标签列表:")
+    print_separator()
+    for tag in tags:
+        level_str = "一级" if tag["level"] == 1 else f"二级[{tag['parent_name']}]"
+        print(f"  [{tag['id']}] {tag['name']} ({level_str}, {tag['video_count']}视频)")
+    
+    print_separator()
+    print("  [0] 取消")
+    print_separator()
+    
+    source_id = input("\n请输入源标签ID（将被删除）: ").strip()
+    if source_id == "0":
+        return
+    
+    try:
+        source_id = int(source_id)
+    except ValueError:
+        print("请输入有效的数字")
+        return
+    
+    target_id = input("请输入目标标签ID（将保留）: ").strip()
+    if target_id == "0":
+        return
+    
+    try:
+        target_id = int(target_id)
+    except ValueError:
+        print("请输入有效的数字")
+        return
+    
+    source_tag = None
+    target_tag = None
+    for tag in tags:
+        if tag["id"] == source_id:
+            source_tag = tag
+        if tag["id"] == target_id:
+            target_tag = tag
+    
+    if not source_tag:
+        print(f"源标签ID {source_id} 不存在")
+        return
+    if not target_tag:
+        print(f"目标标签ID {target_id} 不存在")
+        return
+    
+    if source_id == target_id:
+        print("源标签和目标标签不能相同")
+        return
+    
+    print(f"\n将要合并:")
+    print(f"  源标签: {source_tag['name']} ({source_tag['video_count']}视频) -> 将被删除")
+    print(f"  目标标签: {target_tag['name']} ({target_tag['video_count']}视频) -> 将保留")
+    
+    confirm = input("\n确认合并？(y/n): ").strip().lower()
+    if confirm != 'y':
+        print("已取消")
+        return
+    
+    result = manager.merge_tags(source_id, target_id)
+    
+    if result["success"]:
+        print(f"\n✓ 合并成功")
+        print(f"  转移了 {result['transferred_relations']} 个视频关联")
+        print(f"  源标签已删除")
+    else:
+        print(f"\n✗ 合并失败: {result['error']}")
+
+
+def show_main_menu():
+    """显示主菜单"""
+    print("\n" + "=" * 60)
+    print("  标签管理工具 v1.0")
+    print("=" * 60)
+    print("\n  请选择功能:")
+    print_separator()
+    print("  [1] 查看标签列表")
+    print("      - 显示所有标签的树形结构")
+    print()
+    print("  [2] 创建标签")
+    print("      - 创建一级标签或二级标签")
+    print()
+    print("  [3] 删除标签")
+    print("      - 删除标签（需先处理子标签）")
+    print()
+    print("  [4] 重命名标签")
+    print("      - 修改标签名称")
+    print()
+    print("  [5] 修改标签层级")
+    print("      - 提升二级标签为一级标签")
+    print("      - 降级一级标签为二级标签")
+    print()
+    print("  [6] 合并标签")
+    print("      - 将一个标签合并到另一个标签")
+    print_separator()
+    print("  [0] 退出程序")
+    print_separator()
 
 
 def main():
-    """
-    主函数 - 命令行入口
+    """主函数"""
+    print("\n" + "=" * 60)
+    print("  标签管理工具 v1.0")
+    print("  用于管理视频数据库中的标签")
+    print("=" * 60)
     
-    解析命令行参数并执行相应的标签管理操作。
-    支持多种子命令，每个子命令有独立的参数。
-    """
-    parser = argparse.ArgumentParser(
-        description="视频数据库标签管理工具",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  创建一级标签:
-    python tools/tag_manager.py create "动作" --desc "动作类型视频"
-  
-  创建二级标签 (使用父标签ID):
-    python tools/tag_manager.py create "武侠" --parent 1 --desc "武侠动作片"
-  
-  创建二级标签 (使用父标签名称):
-    python tools/tag_manager.py create "武侠" --parent-name "动作" --desc "武侠动作片"
-  
-  删除标签:
-    python tools/tag_manager.py delete 5
-  
-  强制删除标签:
-    python tools/tag_manager.py delete 5 --force
-  
-  重命名标签:
-    python tools/tag_manager.py rename 5 "功夫片"
-  
-  改变标签层级:
-    python tools/tag_manager.py move 5 --parent 1
-    python tools/tag_manager.py move 5 --root
-  
-  更新标签:
-    python tools/tag_manager.py update 5 --desc "更新后的描述" --sort 10
-  
-  合并标签:
-    python tools/tag_manager.py merge 5 6
-  
-  查看标签树:
-    python tools/tag_manager.py list --tree
-  
-  查看标签详情:
-    python tools/tag_manager.py info 5
-  
-  列出视频:
-    python tools/tag_manager.py videos
-  
-  根据标签列出视频:
-    python tools/tag_manager.py videos --tags 1 2
-  
-  为视频添加标签:
-    python tools/tag_manager.py video-add 1 2
-  
-  从视频移除标签:
-    python tools/tag_manager.py video-remove 1 2
-  
-  设置视频标签:
-    python tools/tag_manager.py video-set 1 --tags 1 2 3
-  
-  查看视频标签:
-    python tools/tag_manager.py video-tags 1
-  
-  批量添加标签:
-    python tools/tag_manager.py batch-add --videos 1 2 3 --tags 1 2
-  
-  批量移除标签:
-    python tools/tag_manager.py batch-remove --videos 1 2 3 --tags 1 2
-  
-  根据标签名搜索视频:
-    python tools/tag_manager.py search "黑丝"
-        """
-    )
+    db_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "video_library.db")
+    db_path = f"sqlite:///{db_file}"
     
-    parser.add_argument(
-        '--db',
-        type=str,
-        help='数据库连接URL (默认: 使用配置文件中的设置)'
-    )
-    
-    subparsers = parser.add_subparsers(dest='command', help='可用命令')
-    
-    create_parser = subparsers.add_parser('create', help='创建标签')
-    create_parser.add_argument('name', type=str, help='标签名称')
-    parent_group = create_parser.add_mutually_exclusive_group()
-    parent_group.add_argument('--parent', type=int, help='父标签ID (可选)')
-    parent_group.add_argument('--parent-name', type=str, help='父标签名称 (可选)')
-    create_parser.add_argument('--desc', type=str, help='标签描述')
-    create_parser.add_argument('--sort', type=int, default=0, help='排序顺序')
-    
-    delete_parser = subparsers.add_parser('delete', help='删除标签')
-    delete_parser.add_argument('tag_id', type=int, help='标签ID')
-    delete_parser.add_argument('--force', action='store_true', help='强制删除(即使有关联视频)')
-    
-    rename_parser = subparsers.add_parser('rename', help='重命名标签')
-    rename_parser.add_argument('tag_id', type=int, help='标签ID')
-    rename_parser.add_argument('new_name', type=str, help='新名称')
-    
-    move_parser = subparsers.add_parser('move', help='改变标签层级')
-    move_parser.add_argument('tag_id', type=int, help='标签ID')
-    move_group = move_parser.add_mutually_exclusive_group(required=True)
-    move_group.add_argument('--parent', type=int, help='新的父标签ID')
-    move_group.add_argument('--root', action='store_true', help='设为一级标签')
-    
-    update_parser = subparsers.add_parser('update', help='更新标签信息')
-    update_parser.add_argument('tag_id', type=int, help='标签ID')
-    update_parser.add_argument('--name', type=str, help='新名称')
-    update_parser.add_argument('--desc', type=str, help='新描述')
-    update_parser.add_argument('--sort', type=int, help='新排序')
-    
-    merge_parser = subparsers.add_parser('merge', help='合并标签')
-    merge_parser.add_argument('source_id', type=int, help='源标签ID')
-    merge_parser.add_argument('target_id', type=int, help='目标标签ID')
-    
-    list_parser = subparsers.add_parser('list', help='列出标签')
-    list_parser.add_argument('--tree', action='store_true', help='以树形结构显示')
-    list_parser.add_argument('--parent', type=int, help='只显示指定父标签的子标签')
-    list_parser.add_argument('--search', type=str, help='搜索标签')
-    
-    info_parser = subparsers.add_parser('info', help='显示标签详细信息')
-    info_parser.add_argument('tag_id', type=int, help='标签ID')
-    
-    videos_parser = subparsers.add_parser('videos', help='列出视频')
-    videos_parser.add_argument('--tags', type=int, nargs='+', help='只显示指定标签的视频')
-    
-    video_add_parser = subparsers.add_parser('video-add', help='为视频添加标签')
-    video_add_parser.add_argument('video_id', type=int, help='视频ID')
-    video_add_parser.add_argument('tag_id', type=int, help='标签ID')
-    
-    video_remove_parser = subparsers.add_parser('video-remove', help='从视频移除标签')
-    video_remove_parser.add_argument('video_id', type=int, help='视频ID')
-    video_remove_parser.add_argument('tag_id', type=int, help='标签ID')
-    
-    video_set_parser = subparsers.add_parser('video-set', help='设置视频的标签（替换现有标签）')
-    video_set_parser.add_argument('video_id', type=int, help='视频ID')
-    video_set_parser.add_argument('--tags', type=int, nargs='+', required=True, help='标签ID列表')
-    
-    video_tags_parser = subparsers.add_parser('video-tags', help='查看视频的所有标签')
-    video_tags_parser.add_argument('video_id', type=int, help='视频ID')
-    
-    batch_add_parser = subparsers.add_parser('batch-add', help='批量为视频添加标签')
-    batch_add_parser.add_argument('--videos', type=int, nargs='+', required=True, help='视频ID列表')
-    batch_add_parser.add_argument('--tags', type=int, nargs='+', required=True, help='标签ID列表')
-    
-    batch_remove_parser = subparsers.add_parser('batch-remove', help='批量从视频移除标签')
-    batch_remove_parser.add_argument('--videos', type=int, nargs='+', required=True, help='视频ID列表')
-    batch_remove_parser.add_argument('--tags', type=int, nargs='+', required=True, help='标签ID列表')
-    
-    search_parser = subparsers.add_parser('search', help='根据标签名称搜索视频')
-    search_parser.add_argument('tag_name', type=str, help='标签名称')
-    
-    args = parser.parse_args()
-    
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
-    
-    manager = TagManagerCLI(db_url=args.db)
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if arg.endswith('.db'):
+            db_path = f"sqlite:///{os.path.abspath(arg)}"
+        else:
+            db_path = arg
     
     try:
-        if args.command == 'create':
-            manager.create_tag(
-                name=args.name,
-                parent_id=args.parent,
-                parent_name=args.parent_name,
-                description=args.desc,
-                sort_order=args.sort
-            )
-        elif args.command == 'delete':
-            manager.delete_tag(args.tag_id, force=args.force)
-        elif args.command == 'rename':
-            manager.rename_tag(args.tag_id, args.new_name)
-        elif args.command == 'move':
-            new_parent_id = None if args.root else args.parent
-            manager.move_tag(args.tag_id, new_parent_id)
-        elif args.command == 'update':
-            manager.update_tag(
-                tag_id=args.tag_id,
-                name=args.name,
-                description=args.desc,
-                sort_order=args.sort
-            )
-        elif args.command == 'merge':
-            manager.merge_tags(args.source_id, args.target_id)
-        elif args.command == 'list':
-            manager.list_tags(
-                parent_id=args.parent,
-                search=args.search,
-                show_tree=args.tree
-            )
-        elif args.command == 'info':
-            manager.show_tag_info(args.tag_id)
-        elif args.command == 'videos':
-            manager.list_videos(tag_ids=args.tags)
-        elif args.command == 'video-add':
-            manager.add_video_tag(args.video_id, args.tag_id)
-        elif args.command == 'video-remove':
-            manager.remove_video_tag(args.video_id, args.tag_id)
-        elif args.command == 'video-set':
-            manager.set_video_tags(args.video_id, args.tags)
-        elif args.command == 'video-tags':
-            manager.show_video_tags(args.video_id)
-        elif args.command == 'batch-add':
-            manager.batch_add_video_tags(args.videos, args.tags)
-        elif args.command == 'batch-remove':
-            manager.batch_remove_video_tags(args.videos, args.tags)
-        elif args.command == 'search':
-            manager.search_videos_by_tag(args.tag_name)
-    finally:
-        manager.close()
+        manager = TagManager(db_url=db_path)
+        print(f"\n✓ 数据库连接成功: {db_file}")
+    except Exception as e:
+        print(f"\n✗ 数据库连接失败: {e}")
+        sys.exit(1)
+    
+    while True:
+        try:
+            show_main_menu()
+            
+            choice = input("请选择功能 (0-6): ").strip().lower()
+            
+            if choice == "0" or choice == "q":
+                print("\n再见！")
+                break
+            elif choice == "1":
+                show_tag_tree(manager)
+                input("\n按回车键继续...")
+            elif choice == "2":
+                create_tag_flow(manager)
+                input("\n按回车键继续...")
+            elif choice == "3":
+                delete_tag_flow(manager)
+                input("\n按回车键继续...")
+            elif choice == "4":
+                rename_tag_flow(manager)
+                input("\n按回车键继续...")
+            elif choice == "5":
+                change_level_flow(manager)
+                input("\n按回车键继续...")
+            elif choice == "6":
+                merge_tags_flow(manager)
+                input("\n按回车键继续...")
+            else:
+                print("无效的选择，请输入 0-6")
+                input("\n按回车键继续...")
+            
+        except KeyboardInterrupt:
+            print("\n\n操作已取消，再见！")
+            break
+        except Exception as e:
+            print(f"\n发生错误: {e}")
+            retry = input("是否继续？(y/n): ").strip().lower()
+            if retry != 'y':
+                break
 
 
 if __name__ == "__main__":
