@@ -1,10 +1,12 @@
 /**
  * 会话管理模块
+ * 
+ * 登录状态永久有效，不会因超时而登出
  */
 
-const SESSION_TIMEOUT = 3 * 60 * 60 * 1000;
-const WARNING_THRESHOLD = 60000;
-const DANGER_THRESHOLD = 180000;
+const SESSION_TIMEOUT = Infinity;
+const WARNING_THRESHOLD = Infinity;
+const DANGER_THRESHOLD = Infinity;
 
 class SessionManager {
     constructor() {
@@ -26,9 +28,7 @@ class SessionManager {
         this.pauseOnVideoPlay = options.pauseOnVideoPlay !== false;
 
         this._bindActivityEvents();
-        this.timerInterval = setInterval(() => this._checkTimeout(), 1000);
-        this._updateTimerDisplay();
-
+        
         if (this.pauseOnVideoPlay) {
             this._startVideoPlaybackCheck();
         }
@@ -72,42 +72,20 @@ class SessionManager {
     }
 
     _updateTimerDisplay() {
-        const elapsed = Date.now() - this.lastActivityTime;
-        const remaining = Math.max(0, SESSION_TIMEOUT - elapsed);
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-
         const timerEl = document.getElementById('sessionTimer');
         if (timerEl) {
-            timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
+            timerEl.textContent = '∞';
             timerEl.classList.remove('warning', 'danger', 'paused');
-            if (this.isPaused) {
-                timerEl.classList.add('paused');
-            } else if (remaining <= WARNING_THRESHOLD) {
-                timerEl.classList.add('danger');
-            } else if (remaining <= DANGER_THRESHOLD) {
-                timerEl.classList.add('warning');
-            }
         }
 
         if (this.onTimerUpdate) {
-            let status = 'normal';
-            if (this.isPaused) {
-                status = 'paused';
-            } else if (remaining <= WARNING_THRESHOLD) {
-                status = 'danger';
-            } else if (remaining <= DANGER_THRESHOLD) {
-                status = 'warning';
-            }
-
             this.onTimerUpdate({
-                minutes,
-                seconds,
-                remaining,
-                status,
-                formatted: `${minutes}:${seconds.toString().padStart(2, '0')}`,
-                isPaused: this.isPaused
+                minutes: Infinity,
+                seconds: 0,
+                remaining: Infinity,
+                status: 'permanent',
+                formatted: '∞',
+                isPaused: false
             });
         }
     }
@@ -152,14 +130,13 @@ class SessionManager {
     }
 
     _defaultTimeout() {
-        alert('由于长时间未操作，您已自动退出登录');
-        window.location.href = '/logout';
+        // 登录状态永久有效，不会自动登出
+        console.log('[SessionManager] 会话永久有效');
     }
 
     _defaultWarning(seconds) {
-        const minutes = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        console.log(`会话将在 ${minutes}分${secs}秒 后过期`);
+        // 登录状态永久有效，不会显示警告
+        console.log('[SessionManager] 会话永久有效');
     }
 
     destroy() {
@@ -174,12 +151,11 @@ class SessionManager {
     }
 
     getRemainingTime() {
-        const elapsed = Date.now() - this.lastActivityTime;
-        return Math.max(0, SESSION_TIMEOUT - elapsed);
+        return Infinity;
     }
 
     isActive() {
-        return this.getRemainingTime() > 0;
+        return true;
     }
 }
 

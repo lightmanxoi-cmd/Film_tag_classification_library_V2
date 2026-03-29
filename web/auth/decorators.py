@@ -10,8 +10,7 @@
 
 会话管理：
     - 检查session中的认证状态
-    - 检查会话超时（默认10分钟）
-    - 更新最后活动时间
+    - 登录状态永久有效，不会因超时而登出
 
 使用示例：
     from web.auth.decorators import login_required
@@ -30,29 +29,21 @@
     - Web页面: 未登录重定向到登录页
     - API接口: 返回401 JSON错误响应
 """
-import os
-import time
 from functools import wraps
 from flask import request, jsonify, redirect, url_for, session, g
-
-
-def get_inactivity_timeout():
-    """获取不活动超时时间（秒）"""
-    return int(os.environ.get('INACTIVITY_TIMEOUT', '600'))
 
 
 def login_required(f):
     """
     登录验证装饰器
     
-    验证用户是否已登录，检查会话是否超时。
+    验证用户是否已登录。
     - Web页面请求：未登录重定向到登录页
     - API请求：返回401 JSON错误
     
     Features:
         - 检查session['authenticated']状态
-        - 检查会话超时（INACTIVITY_TIMEOUT秒）
-        - 更新最后活动时间
+        - 登录状态永久有效，不会超时
     
     Args:
         f: 被装饰的函数
@@ -76,23 +67,6 @@ def login_required(f):
                 }), 401
             return redirect(url_for('auth.login'))
         
-        last_activity = session.get('last_activity')
-        timeout = get_inactivity_timeout()
-        if last_activity:
-            elapsed = time.time() - last_activity
-            if elapsed > timeout:
-                session.clear()
-                if request.path.startswith('/api/') or request.path.startswith('/video/'):
-                    return jsonify({
-                        'success': False, 
-                        'error': '登录已过期，请重新登录', 
-                        'timeout': True
-                    }), 401
-                return redirect(url_for('auth.login'))
-        
-        session['last_activity'] = time.time()
-        session.modified = True
-        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -106,7 +80,7 @@ def api_login_required(f):
     
     Features:
         - 检查session['authenticated']状态
-        - 检查会话超时
+        - 登录状态永久有效，不会超时
         - 返回标准JSON错误响应
         - 包含错误码便于客户端处理
     
@@ -131,22 +105,6 @@ def api_login_required(f):
                 'error_code': 'UNAUTHORIZED'
             }), 401
         
-        last_activity = session.get('last_activity')
-        timeout = get_inactivity_timeout()
-        if last_activity:
-            elapsed = time.time() - last_activity
-            if elapsed > timeout:
-                session.clear()
-                return jsonify({
-                    'success': False, 
-                    'error': '登录已过期，请重新登录', 
-                    'timeout': True,
-                    'error_code': 'SESSION_EXPIRED'
-                }), 401
-        
-        session['last_activity'] = time.time()
-        session.modified = True
-        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -155,13 +113,12 @@ def optional_auth(f):
     """
     可选认证装饰器
     
-    如果用户已登录则更新活动时间，未登录也允许访问。
+    如果用户已登录则允许访问，未登录也允许访问。
     适用于需要区分登录/未登录状态的公开接口。
     
     Features:
         - 不强制要求登录
-        - 已登录用户更新活动时间
-        - 会话超时自动清除
+        - 登录状态永久有效，不会超时
     
     Args:
         f: 被装饰的函数
@@ -182,15 +139,5 @@ def optional_auth(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('authenticated', False):
-            last_activity = session.get('last_activity')
-            timeout = get_inactivity_timeout()
-            if last_activity:
-                elapsed = time.time() - last_activity
-                if elapsed > timeout:
-                    session.clear()
-                else:
-                    session['last_activity'] = time.time()
-                    session.modified = True
         return f(*args, **kwargs)
     return decorated_function

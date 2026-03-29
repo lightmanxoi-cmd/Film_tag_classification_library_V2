@@ -159,7 +159,7 @@ const segmentIndicator = document.getElementById('segmentIndicator');
  * 带认证的 fetch 封装
  * 
  * 封装原生 fetch，自动处理 401 未授权响应。
- * 当用户登录过期时，显示提示并跳转到登录页面。
+ * 当用户未登录时，跳转到登录页面。
  * 
  * @param {string} url - 请求URL
  * @param {Object} options - fetch 选项
@@ -169,10 +169,6 @@ const segmentIndicator = document.getElementById('segmentIndicator');
 async function fetchWithAuth(url, options = {}) {
     const response = await fetch(url, options);
     if (response.status === 401) {
-        const data = await response.clone().json().catch(() => ({}));
-        if (data.timeout) {
-            alert('Session expired, please login again');
-        }
         window.location.href = '/login';
         throw new Error('Unauthorized');
     }

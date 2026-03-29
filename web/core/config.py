@@ -124,7 +124,6 @@ class Config:
         DATABASE_URL: 数据库连接URL
         DATABASE_ECHO: 是否打印SQL语句
         VIDEO_BASE_PATH: 视频文件存储路径
-        INACTIVITY_TIMEOUT: 会话不活动超时时间（秒）
         CACHE_CLEANUP_INTERVAL: 缓存清理间隔（秒）
         AUTH_CONFIG_FILE: 认证配置文件名
         MAX_CONTENT_LENGTH: 最大请求内容长度（10GB）
@@ -138,14 +137,13 @@ class Config:
     SESSION_COOKIE_SECURE = False
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(days=1)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=365)
     
     DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///./video_library.db'
     DATABASE_ECHO = False
     
     VIDEO_BASE_PATH = _get_video_base_path()
     
-    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', '600'))
     CACHE_CLEANUP_INTERVAL = int(os.environ.get('CACHE_CLEANUP_INTERVAL', '300'))
     
     AUTH_CONFIG_FILE = '.auth_config.json'

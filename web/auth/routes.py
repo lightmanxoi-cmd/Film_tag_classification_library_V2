@@ -70,7 +70,6 @@ def login():
         
         if auth_service.verify(password):
             session['authenticated'] = True
-            session['last_activity'] = __import__('time').time()
             session.permanent = True
             next_url = request.args.get('next') or url_for('pages.index')
             return redirect(next_url)

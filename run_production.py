@@ -13,7 +13,6 @@
 可选配置:
     DEFAULT_PASSWORD: 初始默认密码
     DATABASE_URL: 数据库连接URL
-    INACTIVITY_TIMEOUT: 会话超时时间
 """
 import os
 import sys

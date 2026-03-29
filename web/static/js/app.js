@@ -530,10 +530,7 @@ function openRandomRecommend() {
     window.location.href = `/random-recommend?filter=${params}`;
 }
 
-function logout(timeout = false) {
-    if (timeout) {
-        alert('由于长时间未操作，您已自动退出登录');
-    }
+function logout() {
     window.location.href = '/logout';
 }
 
@@ -610,14 +607,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadVideos();
     loadStats();
     
-    initSessionTimeout({
-        onTimeout: () => logout(true),
-        onWarning: (seconds) => {
-            const minutes = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            showToast(`会话将在 ${minutes}分${secs}秒 后过期，请继续操作以保持登录`, 'warning');
-        }
-    });
+    initSessionTimeout();
     
     document.getElementById('searchInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
