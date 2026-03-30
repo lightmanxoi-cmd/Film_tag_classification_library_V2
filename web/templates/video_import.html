@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#141414">
+    <title>视频导入 - Video Library</title>
+    <link rel="stylesheet" href="/static/css/base/_variables.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #141414;
+            color: #fff;
+        }
+
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 1000;
+            border-bottom: 1px solid #222;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #e50914;
+            text-decoration: none;
+            letter-spacing: 2px;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .nav-tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+        }
+
+        .nav-tool-btn:hover {
+            background: #444;
+        }
+
+        .nav-tool-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: transparent;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .back-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: transparent;
+            border: 1px solid #333;
+            border-radius: 50%;
+            color: #e50914;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .import-container {
+            display: flex;
+            height: 100vh;
+            padding-top: 64px;
+        }
+
+        .player-section {
+            width: 33.333%;
+            min-width: 400px;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0a;
+            border-right: 1px solid #222;
+        }
+
+        .player-header {
+            padding: 16px 20px;
+            background: #141414;
+            border-bottom: 1px solid #222;
+        }
+
+        .folder-select-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px 20px;
+            background: #e50914;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .folder-select-btn:hover {
+            background: #f40612;
+        }
+
+        .folder-select-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .folder-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+
+        .folder-path {
+            color: #999;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .video-count {
+            background: rgba(229, 9, 14, 0.2);
+            color: #e50914;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+
+        .progress-section {
+            padding: 16px 20px;
+            background: #111;
+            border-bottom: 1px solid #222;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .progress-title {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .progress-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .progress-stats span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .progress-stats .completed {
+            color: #4caf50;
+        }
+
+        .progress-stats .pending {
+            color: #ff9800;
+        }
+
+        .progress-stats .skipped {
+            color: #9e9e9e;
+        }
+
+        .progress-bar-container {
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .current-video-info {
+            padding: 16px 20px;
+            background: #141414;
+            border-bottom: 1px solid #222;
+        }
+
+        .current-video-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #fff;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .current-video-title .status-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 400;
+        }
+
+        .status-badge.new {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .status-badge.exists {
+            background: #ff9800;
+            color: #000;
+        }
+
+        .current-video-path {
+            font-size: 12px;
+            color: #666;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .player-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            min-height: 0;
+            background: #000;
+        }
+
+        .video-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .video-placeholder svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .video-placeholder p {
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+
+        .video-placeholder .hint {
+            font-size: 14px;
+            color: #555;
+        }
+
+        #videoPlayer {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #videoPlayer.video-js {
+            width: 100%;
+            height: 100%;
+        }
+
+        #videoPlayer.video-js .vjs-tech {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #141414;
+            border-top: 1px solid #222;
+        }
+
+        .nav-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: #333;
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: #e50914;
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .nav-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .video-index {
+            font-size: 14px;
+            color: #fff;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .tag-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a0a;
+            overflow: hidden;
+        }
+
+        .tag-header {
+            padding: 16px 20px;
+            background: #141414;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tag-header h2 {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .selected-tags-count {
+            background: #e50914;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+
+        .tag-columns {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: #222;
+            overflow: hidden;
+        }
+
+        .tag-column {
+            background: #0a0a0a;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .tag-column::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .tag-column::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .tag-column::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        .tag-category {
+            margin-bottom: 8px;
+        }
+
+        .tag-category-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .tag-category-header:hover {
+            background: #252525;
+        }
+
+        .tag-category-header.expanded .toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .toggle-icon {
+            font-size: 10px;
+            color: #666;
+            transition: transform 0.3s;
+        }
+
+        .tag-category-header h3 {
+            font-size: 14px;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .tag-children {
+            display: none;
+            padding-left: 20px;
+            margin-top: 4px;
+        }
+
+        .tag-children.show {
+            display: block;
+        }
+
+        .tag-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin: 2px 0;
+            background: #1a1a1a;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .tag-item:hover {
+            background: #252525;
+        }
+
+        .tag-item.selected {
+            background: rgba(229, 9, 14, 0.2);
+            border-color: #e50914;
+        }
+
+        .tag-name {
+            font-size: 13px;
+            color: #ccc;
+        }
+
+        .tag-item.selected .tag-name {
+            color: #fff;
+        }
+
+        .tag-count {
+            font-size: 11px;
+            color: #666;
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .tag-item.selected .tag-count {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .import-actions {
+            padding: 16px 20px;
+            background: #141414;
+            border-top: 1px solid #222;
+        }
+
+        .selected-tags-display {
+            margin-bottom: 12px;
+        }
+
+        .selected-tags-display h4 {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+
+        .selected-tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 32px;
+        }
+
+        .selected-tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: rgba(229, 9, 14, 0.2);
+            border: 1px solid #e50914;
+            border-radius: 16px;
+            font-size: 12px;
+            color: #fff;
+        }
+
+        .selected-tag-chip .remove-tag {
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 14px;
+        }
+
+        .selected-tag-chip .remove-tag:hover {
+            opacity: 1;
+        }
+
+        .no-tags-selected {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .import-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 20px;
+            background: #e50914;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 15px;
+            transition: background 0.3s;
+        }
+
+        .import-btn:hover:not(:disabled) {
+            background: #f40612;
+        }
+
+        .import-btn:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .import-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .skip-btn {
+            padding: 14px 20px;
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 15px;
+            transition: background 0.3s;
+        }
+
+        .skip-btn:hover {
+            background: #444;
+        }
+
+        .import-status {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        .import-status.success {
+            display: block;
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+
+        .import-status.error {
+            display: block;
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
+
+        .video-list-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            background: #0a0a0a;
+            border-top: 1px solid #222;
+            display: none;
+            z-index: 100;
+        }
+
+        .video-list-panel.show {
+            display: block;
+        }
+
+        .video-list-header {
+            padding: 8px 16px;
+            background: #141414;
+            border-bottom: 1px solid #222;
+            font-size: 13px;
+            color: #999;
+        }
+
+        .video-list-scroll {
+            display: flex;
+            gap: 8px;
+            padding: 8px 16px;
+            overflow-x: auto;
+            height: calc(100% - 36px);
+        }
+
+        .video-list-item {
+            flex-shrink: 0;
+            width: 120px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .video-list-item:hover {
+            background: #252525;
+        }
+
+        .video-list-item.current {
+            border-color: #e50914;
+        }
+
+        .video-list-item.completed {
+            border-color: #4caf50;
+            opacity: 0.7;
+        }
+
+        .video-list-item.skipped {
+            border-color: #666;
+            opacity: 0.5;
+        }
+
+        .video-list-item .item-title {
+            font-size: 12px;
+            color: #fff;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .video-list-item .item-status {
+            font-size: 10px;
+            margin-top: 4px;
+        }
+
+        .video-list-item.completed .item-status {
+            color: #4caf50;
+        }
+
+        .video-list-item.skipped .item-status {
+            color: #666;
+        }
+
+        .video-list-item.current .item-status {
+            color: #e50914;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top-color: #e50914;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .confirm-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .confirm-dialog.show {
+            display: flex;
+        }
+
+        .confirm-dialog-content {
+            background: #1a1a1a;
+            padding: 24px;
+            border-radius: 8px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .confirm-dialog-content h3 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #ff9800;
+        }
+
+        .confirm-dialog-content p {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .confirm-dialog-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .confirm-dialog-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .confirm-dialog-buttons .btn-skip {
+            background: #666;
+            color: #fff;
+        }
+
+        .confirm-dialog-buttons .btn-skip:hover {
+            background: #777;
+        }
+
+        .confirm-dialog-buttons .btn-continue {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .confirm-dialog-buttons .btn-continue:hover {
+            background: #f40612;
+        }
+
+        .tool-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .tool-dialog.show {
+            display: flex;
+        }
+
+        .tool-dialog-content {
+            background: #1a1a1a;
+            padding: 24px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .tool-dialog-content h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tool-dialog-content h3 svg {
+            width: 24px;
+            height: 24px;
+            color: #e50914;
+        }
+
+        .tool-dialog-content .description {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .tool-dialog-content .form-group {
+            margin-bottom: 16px;
+        }
+
+        .tool-dialog-content label {
+            display: block;
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 6px;
+        }
+
+        .tool-dialog-content .path-input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-dialog-content input[type="text"] {
+            flex: 1;
+            padding: 10px 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .tool-dialog-content input[type="text"]:focus {
+            outline: none;
+            border-color: #e50914;
+        }
+
+        .tool-dialog-content .browse-btn {
+            padding: 10px 16px;
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: background 0.3s;
+        }
+
+        .tool-dialog-content .browse-btn:hover {
+            background: #444;
+        }
+
+        .tool-dialog-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .tool-dialog-buttons button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .tool-dialog-buttons .btn-cancel {
+            background: #333;
+            color: #fff;
+        }
+
+        .tool-dialog-buttons .btn-cancel:hover {
+            background: #444;
+        }
+
+        .tool-dialog-buttons .btn-execute {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .tool-dialog-buttons .btn-execute:hover {
+            background: #f40612;
+        }
+
+        .tool-dialog-buttons .btn-execute:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .tool-result {
+            margin-top: 16px;
+            padding: 12px;
+            background: #0a0a0a;
+            border-radius: 4px;
+            font-size: 13px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .tool-result.show {
+            display: block;
+        }
+
+        .tool-result .result-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #222;
+        }
+
+        .tool-result .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .tool-result .result-item.success {
+            color: #4caf50;
+        }
+
+        .tool-result .result-item.error {
+            color: #f44336;
+        }
+
+        .tool-result .result-item.skip {
+            color: #ff9800;
+        }
+
+        .tool-result .result-summary {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+            font-weight: 500;
+        }
+
+        @media (max-width: 1200px) {
+            .player-section {
+                width: 40%;
+                min-width: 350px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .import-container {
+                flex-direction: column;
+            }
+
+            .player-section {
+                width: 100%;
+                max-width: none;
+                min-width: auto;
+                height: 50vh;
+            }
+
+            .tag-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/" class="logo">VIDEO LIBRARY</a>
+        </div>
+        <div class="nav-actions">
+            <button class="nav-tool-btn" onclick="showMoveDialog()" title="根据标签移动视频文件">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                </svg>
+                视频移动
+            </button>
+            <button class="nav-tool-btn" onclick="showUpdatePathDialog()" title="更新视频库中的文件路径">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                更新路径
+            </button>
+            <a href="/" class="back-btn">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                </svg>
+                返回主页
+            </a>
+        </div>
+        <div class="nav-user">
+            <button class="logout-btn" onclick="logout()" title="退出登录">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <div class="import-container">
+        <div class="player-section">
+            <div class="player-header">
+                <button class="folder-select-btn" onclick="selectFolder()">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                    </svg>
+                    选择文件夹
+                </button>
+                <div class="folder-info">
+                    <span class="folder-path" id="folderPath">未选择文件夹</span>
+                    <span class="video-count" id="videoCount" style="display: none;">0 个视频</span>
+                </div>
+            </div>
+
+            <div class="progress-section" id="progressSection" style="display: none;">
+                <div class="progress-header">
+                    <span class="progress-title">导入进度</span>
+                    <div class="progress-stats">
+                        <span class="completed">✓ 已完成: <span id="completedCount">0</span></span>
+                        <span class="pending">○ 待处理: <span id="pendingCount">0</span></span>
+                        <span class="skipped">→ 已跳过: <span id="skippedCount">0</span></span>
+                    </div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="current-video-info" id="currentVideoInfo" style="display: none;">
+                <div class="current-video-title">
+                    <span id="currentVideoTitle">-</span>
+                    <span class="status-badge new" id="statusBadge" style="display: none;">新视频</span>
+                </div>
+                <div class="current-video-path" id="currentVideoPath">-</div>
+            </div>
+
+            <div class="player-wrapper">
+                <div class="video-placeholder" id="videoPlaceholder">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                    </svg>
+                    <p>请选择包含视频的文件夹</p>
+                    <p class="hint">支持 MP4, AVI, MKV, MOV, WMV 等格式</p>
+                </div>
+                <video id="videoPlayer" class="video-js vjs-big-play-centered vjs-fluid" controls preload="auto" style="display: none;" playsinline webkit-playsinline loop>
+                    <p class="vjs-no-js">您的浏览器不支持视频播放，请升级浏览器。</p>
+                </video>
+            </div>
+
+            <div class="video-nav">
+                <button class="nav-btn" id="prevBtn" onclick="prevVideo()" disabled title="上一个">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                </button>
+                <span class="video-index" id="videoIndex">0 / 0</span>
+                <button class="nav-btn" id="nextBtn" onclick="nextVideo()" disabled title="下一个">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="tag-section">
+            <div class="tag-header">
+                <h2>标签选择</h2>
+                <span class="selected-tags-count" id="selectedTagsCount">已选 0 个</span>
+            </div>
+
+            <div class="tag-columns" id="tagColumns">
+                <div class="tag-column" id="tagColumn1">
+                    <div class="loading">加载中...</div>
+                </div>
+                <div class="tag-column" id="tagColumn2"></div>
+                <div class="tag-column" id="tagColumn3"></div>
+            </div>
+
+            <div class="import-actions">
+                <div class="selected-tags-display">
+                    <h4>当前已选标签</h4>
+                    <div class="selected-tags-list" id="selectedTagsList">
+                        <span class="no-tags-selected">未选择任何标签</span>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="import-btn" id="importBtn" onclick="importVideo()" disabled>
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                        </svg>
+                        标签导入
+                    </button>
+                    <button class="skip-btn" id="skipBtn" onclick="skipVideo()" style="display: none;">
+                        跳过
+                    </button>
+                </div>
+                <div class="import-status" id="importStatus"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="confirm-dialog" id="confirmDialog">
+        <div class="confirm-dialog-content">
+            <h3>⚠️ 视频已存在</h3>
+            <p id="confirmDialogMessage">该视频已在库中，是否继续编辑标签？</p>
+            <div class="confirm-dialog-buttons">
+                <button class="btn-skip" onclick="confirmSkip()">跳过此视频</button>
+                <button class="btn-continue" onclick="confirmContinue()">继续编辑</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool-dialog" id="moveDialog">
+        <div class="tool-dialog-content">
+            <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                </svg>
+                视频移动
+            </h3>
+            <p class="description">根据视频在库中的标签，将视频文件移动到对应的分类文件夹中。系统会检索视频的所有标签，如果标签名与目标文件夹中的子文件夹同名，则移动到该文件夹。</p>
+            
+            <div class="form-group">
+                <label>视频源文件夹路径</label>
+                <div class="path-input-group">
+                    <input type="text" id="moveSourcePath" placeholder="选择或输入包含视频文件的文件夹路径">
+                    <button class="browse-btn" onclick="browseMoveSource()">浏览</button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>目标分类文件夹路径</label>
+                <div class="path-input-group">
+                    <input type="text" id="moveTargetPath" placeholder="选择或输入包含分类子文件夹的目标路径">
+                    <button class="browse-btn" onclick="browseMoveTarget()">浏览</button>
+                </div>
+            </div>
+            
+            <div class="tool-result" id="moveResult"></div>
+            
+            <div class="tool-dialog-buttons">
+                <button class="btn-cancel" onclick="closeMoveDialog()">取消</button>
+                <button class="btn-execute" id="moveExecuteBtn" onclick="executeMove()">执行移动</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tool-dialog" id="updatePathDialog">
+        <div class="tool-dialog-content">
+            <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                更新路径
+            </h3>
+            <p class="description">扫描指定文件夹中的视频文件，根据文件名匹配数据库中的视频记录，并更新其文件路径。适用于视频文件位置发生变化后的路径更新。</p>
+            
+            <div class="form-group">
+                <label>搜索路径</label>
+                <div class="path-input-group">
+                    <input type="text" id="updateSearchPath" placeholder="选择或输入要搜索视频文件的文件夹路径">
+                    <button class="browse-btn" onclick="browseUpdatePath()">浏览</button>
+                </div>
+            </div>
+            
+            <div class="tool-result" id="updatePathResult"></div>
+            
+            <div class="tool-dialog-buttons">
+                <button class="btn-cancel" onclick="closeUpdatePathDialog()">取消</button>
+                <button class="btn-execute" id="updatePathExecuteBtn" onclick="executeUpdatePath()">执行更新</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script src="/static/js/app.js" type="module"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/static/js/modules/api/fetch.js';
+
+        let videoPlayer = null;
+        let videoFiles = [];
+        let currentIndex = -1;
+        let tagTree = [];
+        let selectedTags = new Map();
+        let videoStatus = new Map();
+        let isElectron = window.electronAPI && window.electronAPI.isElectron;
+
+        const STATUS = {
+            PENDING: 'pending',
+            COMPLETED: 'completed',
+            SKIPPED: 'skipped'
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadTagTree();
+        });
+
+        async function loadTagTree() {
+            try {
+                const response = await fetchWithAuth('/api/v1/tags/tree');
+                const result = await response.json();
+                
+                if (result.success) {
+                    tagTree = result.data;
+                    renderTagTree();
+                }
+            } catch (error) {
+                console.error('加载标签树失败:', error);
+                document.getElementById('tagColumn1').innerHTML = '<div class="error" style="padding:20px;color:#f44336;">加载标签失败</div>';
+            }
+        }
+
+        function renderTagTree() {
+            const column1 = document.getElementById('tagColumn1');
+            const column2 = document.getElementById('tagColumn2');
+            const column3 = document.getElementById('tagColumn3');
+            column1.innerHTML = '';
+            column2.innerHTML = '';
+            column3.innerHTML = '';
+
+            const totalCategories = tagTree.length;
+            const perColumn = Math.ceil(totalCategories / 3);
+            
+            const categories1 = tagTree.slice(0, perColumn);
+            const categories2 = tagTree.slice(perColumn, perColumn * 2);
+            const categories3 = tagTree.slice(perColumn * 2);
+
+            categories1.forEach(category => {
+                column1.appendChild(createCategoryElement(category));
+            });
+
+            categories2.forEach(category => {
+                column2.appendChild(createCategoryElement(category));
+            });
+
+            categories3.forEach(category => {
+                column3.appendChild(createCategoryElement(category));
+            });
+        }
+
+        function createCategoryElement(category) {
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'tag-category';
+            
+            const header = document.createElement('div');
+            header.className = 'tag-category-header expanded';
+            header.innerHTML = `
+                <span class="toggle-icon">▶</span>
+                <h3>${category.name}</h3>
+            `;
+            
+            const children = document.createElement('div');
+            children.className = 'tag-children show';
+            
+            if (category.children && category.children.length > 0) {
+                category.children.forEach(child => {
+                    const tagItem = document.createElement('div');
+                    tagItem.className = 'tag-item';
+                    tagItem.dataset.tagId = child.id;
+                    tagItem.dataset.parentId = category.id;
+                    tagItem.dataset.parentName = category.name;
+                    tagItem.innerHTML = `
+                        <span class="tag-name">${child.name}</span>
+                        <span class="tag-count">${child.video_count || 0}</span>
+                    `;
+                    
+                    tagItem.addEventListener('click', () => toggleTag(child, category));
+                    children.appendChild(tagItem);
+                });
+            }
+            
+            header.addEventListener('click', () => {
+                header.classList.toggle('expanded');
+                children.classList.toggle('show');
+            });
+            
+            categoryDiv.appendChild(header);
+            categoryDiv.appendChild(children);
+            return categoryDiv;
+        }
+
+        function toggleTag(tag, category) {
+            const tagItem = document.querySelector(`.tag-item[data-tag-id="${tag.id}"]`);
+            
+            if (selectedTags.has(tag.id)) {
+                selectedTags.delete(tag.id);
+                tagItem.classList.remove('selected');
+            } else {
+                selectedTags.set(tag.id, {
+                    id: tag.id,
+                    name: tag.name,
+                    parentId: category.id,
+                    parentName: category.name
+                });
+                tagItem.classList.add('selected');
+            }
+            
+            updateSelectedTagsUI();
+            updateImportButton();
+        }
+
+        function updateSelectedTagsUI() {
+            const container = document.getElementById('selectedTagsList');
+            const countEl = document.getElementById('selectedTagsCount');
+            
+            countEl.textContent = `已选 ${selectedTags.size} 个`;
+            
+            if (selectedTags.size === 0) {
+                container.innerHTML = '<span class="no-tags-selected">未选择任何标签</span>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            selectedTags.forEach((tag, id) => {
+                const chip = document.createElement('span');
+                chip.className = 'selected-tag-chip';
+                chip.innerHTML = `
+                    ${tag.parentName}/${tag.name}
+                    <span class="remove-tag" data-tag-id="${id}">×</span>
+                `;
+                
+                chip.querySelector('.remove-tag').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const tagId = parseInt(e.target.dataset.tagId);
+                    selectedTags.delete(tagId);
+                    document.querySelector(`.tag-item[data-tag-id="${tagId}"]`)?.classList.remove('selected');
+                    updateSelectedTagsUI();
+                    updateImportButton();
+                });
+                
+                container.appendChild(chip);
+            });
+        }
+
+        function initVideoPlayer() {
+            if (videoPlayer) {
+                return videoPlayer;
+            }
+            
+            const videoEl = document.getElementById('videoPlayer');
+            if (!videoEl) {
+                console.error('Video element not found');
+                return null;
+            }
+            
+            videoEl.style.display = 'block';
+            
+            videoPlayer = videojs('videoPlayer', {
+                fluid: true,
+                responsive: true,
+                muted: true,
+                controls: true,
+                loop: true,
+                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                controlBar: {
+                    children: [
+                        'playToggle',
+                        'volumePanel',
+                        'currentTimeDisplay',
+                        'timeDivider',
+                        'durationDisplay',
+                        'progressControl',
+                        'playbackRateMenuButton',
+                        'fullscreenToggle'
+                    ]
+                }
+            });
+            
+            videoPlayer.on('error', function(e) {
+                console.error('Video.js error:', e);
+            });
+            
+            return videoPlayer;
+        }
+
+        async function selectFolder() {
+            if (isElectron) {
+                const folderPath = await window.electronAPI.selectFolder();
+                
+                if (!folderPath) {
+                    return;
+                }
+                
+                showLoading(true);
+                
+                const result = await window.electronAPI.scanVideoFolder(folderPath);
+                
+                showLoading(false);
+                
+                if (!result.success) {
+                    showStatus(`扫描失败: ${result.error}`, 'error');
+                    return;
+                }
+                
+                videoFiles = result.videos.map(v => ({
+                    name: v.name,
+                    path: v.path,
+                    relativePath: v.relativePath,
+                    title: v.title,
+                    size: v.size
+                }));
+                
+                if (videoFiles.length > 0) {
+                    document.getElementById('folderPath').textContent = folderPath;
+                    document.getElementById('videoCount').textContent = `${videoFiles.length} 个视频`;
+                    document.getElementById('videoCount').style.display = 'inline';
+                    document.getElementById('progressSection').style.display = 'block';
+                    
+                    videoStatus.clear();
+                    videoFiles.forEach((_, index) => {
+                        videoStatus.set(index, STATUS.PENDING);
+                    });
+                    
+                    currentIndex = 0;
+                    updateProgress();
+                    updateVideoNav();
+                    checkAndPlayCurrentVideo();
+                } else {
+                    showStatus('该文件夹中没有找到视频文件', 'error');
+                }
+            } else {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.webkitdirectory = true;
+                input.multiple = true;
+                
+                input.onchange = async (e) => {
+                    const files = Array.from(e.target.files);
+                    const videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.3gp', '.ogv'];
+                    
+                    videoFiles = files
+                        .filter(file => {
+                            const ext = '.' + file.name.split('.').pop().toLowerCase();
+                            return videoExtensions.includes(ext);
+                        })
+                        .map(file => ({
+                            name: file.name,
+                            path: file.webkitRelativePath,
+                            file: file,
+                            title: file.name.replace(/\.[^/.]+$/, '')
+                        }))
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    if (videoFiles.length > 0) {
+                        const folderPath = videoFiles[0].path.split('/')[0];
+                        document.getElementById('folderPath').textContent = folderPath;
+                        document.getElementById('videoCount').textContent = `${videoFiles.length} 个视频`;
+                        document.getElementById('videoCount').style.display = 'inline';
+                        document.getElementById('progressSection').style.display = 'block';
+                        
+                        videoStatus.clear();
+                        videoFiles.forEach((_, index) => {
+                            videoStatus.set(index, STATUS.PENDING);
+                        });
+                        
+                        currentIndex = 0;
+                        updateProgress();
+                        updateVideoNav();
+                        checkAndPlayCurrentVideo();
+                    } else {
+                        showStatus('该文件夹中没有找到视频文件', 'error');
+                    }
+                };
+                
+                input.click();
+            }
+        }
+
+        function updateProgress() {
+            let completed = 0;
+            let skipped = 0;
+            let pending = 0;
+            
+            videoStatus.forEach(status => {
+                if (status === STATUS.COMPLETED) completed++;
+                else if (status === STATUS.SKIPPED) skipped++;
+                else pending++;
+            });
+            
+            const total = videoFiles.length;
+            const processed = completed + skipped;
+            const percentage = total > 0 ? (processed / total * 100) : 0;
+            
+            document.getElementById('completedCount').textContent = completed;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('skippedCount').textContent = skipped;
+            document.getElementById('progressBar').style.width = `${percentage}%`;
+        }
+
+        function updateVideoNav() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const indexSpan = document.getElementById('videoIndex');
+            
+            prevBtn.disabled = currentIndex <= 0;
+            nextBtn.disabled = currentIndex >= videoFiles.length - 1;
+            
+            const completed = videoStatus.get(currentIndex) === STATUS.COMPLETED;
+            const skipped = videoStatus.get(currentIndex) === STATUS.SKIPPED;
+            let statusText = '';
+            if (completed) statusText = ' ✓';
+            if (skipped) statusText = ' →';
+            
+            indexSpan.textContent = `${currentIndex + 1} / ${videoFiles.length}${statusText}`;
+        }
+
+        async function checkAndPlayCurrentVideo() {
+            if (currentIndex < 0 || currentIndex >= videoFiles.length) return;
+            
+            const video = videoFiles[currentIndex];
+            
+            document.getElementById('currentVideoInfo').style.display = 'block';
+            document.getElementById('currentVideoTitle').textContent = video.title;
+            document.getElementById('currentVideoPath').textContent = video.path;
+            
+            const statusBadge = document.getElementById('statusBadge');
+            
+            if (isElectron && video.path) {
+                try {
+                    const response = await fetchWithAuth(`/api/v1/import/check-video?file_path=${encodeURIComponent(video.path)}`);
+                    const result = await response.json();
+                    
+                    if (result.success && result.data.exists) {
+                        statusBadge.textContent = '已存在';
+                        statusBadge.className = 'status-badge exists';
+                        statusBadge.style.display = 'inline';
+                        
+                        if (videoStatus.get(currentIndex) === STATUS.PENDING) {
+                            showConfirmDialog(video.title);
+                            return;
+                        }
+                    } else {
+                        statusBadge.textContent = '新视频';
+                        statusBadge.className = 'status-badge new';
+                        statusBadge.style.display = 'inline';
+                    }
+                } catch (error) {
+                    console.error('检查视频失败:', error);
+                    statusBadge.style.display = 'none';
+                }
+            } else {
+                statusBadge.style.display = 'none';
+            }
+            
+            playCurrentVideo();
+        }
+
+        function showConfirmDialog(videoTitle) {
+            document.getElementById('confirmDialogMessage').textContent = 
+                `"${videoTitle}" 已在库中，是否继续编辑标签？`;
+            document.getElementById('confirmDialog').classList.add('show');
+            document.getElementById('skipBtn').style.display = 'block';
+        }
+
+        window.confirmSkip = function() {
+            document.getElementById('confirmDialog').classList.remove('show');
+            videoStatus.set(currentIndex, STATUS.SKIPPED);
+            updateProgress();
+            updateVideoNav();
+            showStatus(`已跳过: ${videoFiles[currentIndex].title}`, 'success');
+            autoNextVideo();
+        };
+
+        window.confirmContinue = function() {
+            document.getElementById('confirmDialog').classList.remove('show');
+            playCurrentVideo();
+        };
+
+        async function playCurrentVideo() {
+            if (currentIndex < 0 || currentIndex >= videoFiles.length) return;
+            
+            const video = videoFiles[currentIndex];
+            
+            document.getElementById('videoPlaceholder').style.display = 'none';
+            
+            const videoEl = document.getElementById('videoPlayer');
+            videoEl.style.display = 'block';
+            
+            if (!videoPlayer) {
+                videoPlayer = initVideoPlayer();
+            }
+            
+            if (!videoPlayer) {
+                console.error('Failed to initialize video player');
+                return;
+            }
+            
+            const mimeType = getMimeType(video.name);
+            console.log('Playing video:', video.name, 'MIME:', mimeType);
+            
+            if (isElectron && video.path) {
+                videoPlayer.src({
+                    src: 'file:///' + video.path.replace(/\\/g, '/'),
+                    type: mimeType
+                });
+            } else if (video.file) {
+                const url = URL.createObjectURL(video.file);
+                videoPlayer.src({
+                    src: url,
+                    type: mimeType
+                });
+            }
+            
+            videoPlayer.one('canplay', function() {
+                this.play().catch(e => console.log('自动播放失败，请手动点击播放:', e));
+            });
+            
+            updateImportButton();
+        }
+
+        function getMimeType(filename) {
+            const ext = '.' + filename.split('.').pop().toLowerCase();
+            const mimeTypes = {
+                '.mp4': 'video/mp4',
+                '.mkv': 'video/x-matroska',
+                '.webm': 'video/webm',
+                '.avi': 'video/x-msvideo',
+                '.wmv': 'video/x-ms-wmv',
+                '.mov': 'video/quicktime',
+                '.flv': 'video/x-flv',
+                '.m4v': 'video/mp4'
+            };
+            return mimeTypes[ext] || 'video/mp4';
+        }
+
+        function prevVideo() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateVideoNav();
+                checkAndPlayCurrentVideo();
+            }
+        }
+
+        function nextVideo() {
+            if (currentIndex < videoFiles.length - 1) {
+                currentIndex++;
+                updateVideoNav();
+                checkAndPlayCurrentVideo();
+            }
+        }
+
+        function autoNextVideo() {
+            if (currentIndex < videoFiles.length - 1) {
+                currentIndex++;
+                updateVideoNav();
+                checkAndPlayCurrentVideo();
+            } else {
+                showStatus('所有视频处理完成！', 'success');
+            }
+        }
+
+        function updateImportButton() {
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = videoFiles.length === 0 || currentIndex < 0 || selectedTags.size === 0;
+        }
+
+        async function importVideo() {
+            if (currentIndex < 0 || currentIndex >= videoFiles.length) return;
+            if (selectedTags.size === 0) {
+                showStatus('请先选择标签', 'error');
+                return;
+            }
+            
+            const video = videoFiles[currentIndex];
+            const tagIds = Array.from(selectedTags.keys());
+            
+            showLoading(true);
+            hideStatus();
+            
+            try {
+                const requestBody = {
+                    title: video.title,
+                    tag_ids: tagIds
+                };
+                
+                if (isElectron && video.path) {
+                    requestBody.file_path = video.path;
+                }
+                
+                const response = await fetchWithAuth('/api/v1/import/video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    videoStatus.set(currentIndex, STATUS.COMPLETED);
+                    updateProgress();
+                    updateVideoNav();
+                    
+                    if (data.action === 'created') {
+                        showStatus(`✓ 导入成功: ${data.video.title}`, 'success');
+                    } else {
+                        showStatus(`✓ 更新成功: ${data.video.title}，新增 ${data.video.tags_added} 个标签`, 'success');
+                    }
+                    
+                    setTimeout(() => {
+                        autoNextVideo();
+                    }, 800);
+                } else {
+                    showStatus(`✗ 导入失败: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('导入失败:', error);
+                showStatus(`✗ 导入失败: ${error.message || error}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        window.skipVideo = function() {
+            if (currentIndex < 0 || currentIndex >= videoFiles.length) return;
+            
+            videoStatus.set(currentIndex, STATUS.SKIPPED);
+            updateProgress();
+            updateVideoNav();
+            showStatus(`已跳过: ${videoFiles[currentIndex].title}`, 'success');
+            autoNextVideo();
+        };
+
+        function showStatus(message, type) {
+            const status = document.getElementById('importStatus');
+            status.textContent = message;
+            status.className = `import-status ${type}`;
+        }
+
+        function hideStatus() {
+            const status = document.getElementById('importStatus');
+            status.className = 'import-status';
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) {
+                overlay.classList.add('show');
+            } else {
+                overlay.classList.remove('show');
+            }
+        }
+
+        window.selectFolder = selectFolder;
+        window.prevVideo = prevVideo;
+        window.nextVideo = nextVideo;
+        window.importVideo = importVideo;
+
+        async function loadSavedPaths() {
+            if (!isElectron) return;
+            
+            try {
+                const savedPaths = await window.electronAPI.getSavedPaths();
+                if (savedPaths) {
+                    if (savedPaths.moveSourcePath) {
+                        document.getElementById('moveSourcePath').value = savedPaths.moveSourcePath;
+                    }
+                    if (savedPaths.moveTargetPath) {
+                        document.getElementById('moveTargetPath').value = savedPaths.moveTargetPath;
+                    }
+                    if (savedPaths.updateSearchPath) {
+                        document.getElementById('updateSearchPath').value = savedPaths.updateSearchPath;
+                    }
+                }
+            } catch (error) {
+                console.error('加载保存的路径失败:', error);
+            }
+        }
+
+        async function savePaths() {
+            if (!isElectron) return;
+            
+            const paths = {
+                moveSourcePath: document.getElementById('moveSourcePath').value,
+                moveTargetPath: document.getElementById('moveTargetPath').value,
+                updateSearchPath: document.getElementById('updateSearchPath').value
+            };
+            
+            try {
+                await window.electronAPI.savePaths(paths);
+            } catch (error) {
+                console.error('保存路径失败:', error);
+            }
+        }
+
+        window.showMoveDialog = async function() {
+            await loadSavedPaths();
+            document.getElementById('moveDialog').classList.add('show');
+            document.getElementById('moveResult').classList.remove('show');
+        };
+
+        window.closeMoveDialog = function() {
+            document.getElementById('moveDialog').classList.remove('show');
+        };
+
+        window.browseMoveSource = async function() {
+            if (isElectron) {
+                const folderPath = await window.electronAPI.selectFolder();
+                if (folderPath) {
+                    document.getElementById('moveSourcePath').value = folderPath;
+                    savePaths();
+                }
+            }
+        };
+
+        window.browseMoveTarget = async function() {
+            if (isElectron) {
+                const folderPath = await window.electronAPI.selectFolder();
+                if (folderPath) {
+                    document.getElementById('moveTargetPath').value = folderPath;
+                    savePaths();
+                }
+            }
+        };
+
+        window.showUpdatePathDialog = async function() {
+            await loadSavedPaths();
+            document.getElementById('updatePathDialog').classList.add('show');
+            document.getElementById('updatePathResult').classList.remove('show');
+        };
+
+        window.closeUpdatePathDialog = function() {
+            document.getElementById('updatePathDialog').classList.remove('show');
+        };
+
+        window.browseUpdatePath = async function() {
+            if (isElectron) {
+                const folderPath = await window.electronAPI.selectFolder();
+                if (folderPath) {
+                    document.getElementById('updateSearchPath').value = folderPath;
+                    savePaths();
+                }
+            }
+        };
+
+        window.executeMove = async function() {
+            const sourcePath = document.getElementById('moveSourcePath').value.trim();
+            const targetPath = document.getElementById('moveTargetPath').value.trim();
+            
+            if (!sourcePath || !targetPath) {
+                alert('请填写源文件夹和目标文件夹路径');
+                return;
+            }
+            
+            const executeBtn = document.getElementById('moveExecuteBtn');
+            executeBtn.disabled = true;
+            executeBtn.textContent = '执行中...';
+            
+            const resultDiv = document.getElementById('moveResult');
+            resultDiv.innerHTML = '<div class="result-item">正在执行视频移动...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetchWithAuth('/api/v1/tools/move-videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sourcePath, targetPath })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    let html = '';
+                    
+                    if (data.moved && data.moved.length > 0) {
+                        data.moved.forEach(item => {
+                            html += `<div class="result-item success">✓ ${item.title} → ${item.targetFolder}</div>`;
+                        });
+                    }
+                    
+                    if (data.skipped && data.skipped.length > 0) {
+                        data.skipped.forEach(item => {
+                            html += `<div class="result-item skip">○ ${item.title} (${item.reason})</div>`;
+                        });
+                    }
+                    
+                    if (data.errors && data.errors.length > 0) {
+                        data.errors.forEach(item => {
+                            html += `<div class="result-item error">✗ ${item.title}: ${item.error}</div>`;
+                        });
+                    }
+                    
+                    html += `<div class="result-summary">
+                        成功移动: ${data.moved?.length || 0} 个 | 
+                        跳过: ${data.skipped?.length || 0} 个 | 
+                        失败: ${data.errors?.length || 0} 个
+                    </div>`;
+                    
+                    resultDiv.innerHTML = html;
+                    savePaths();
+                } else {
+                    resultDiv.innerHTML = `<div class="result-item error">执行失败: ${result.error || result.message || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-item error">请求失败: ${error.message}</div>`;
+            } finally {
+                executeBtn.disabled = false;
+                executeBtn.textContent = '执行移动';
+            }
+        };
+
+        window.executeUpdatePath = async function() {
+            const searchPath = document.getElementById('updateSearchPath').value.trim();
+            
+            if (!searchPath) {
+                alert('请填写搜索路径');
+                return;
+            }
+            
+            const executeBtn = document.getElementById('updatePathExecuteBtn');
+            executeBtn.disabled = true;
+            executeBtn.textContent = '执行中...';
+            
+            const resultDiv = document.getElementById('updatePathResult');
+            resultDiv.innerHTML = '<div class="result-item">正在扫描并更新路径...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetchWithAuth('/api/v1/tools/update-paths', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ searchPath })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    let html = '';
+                    
+                    if (data.updated && data.updated.length > 0) {
+                        data.updated.forEach(item => {
+                            html += `<div class="result-item success">✓ ${item.title}<br><small style="color:#666">${item.oldPath}</small><br><small style="color:#4caf50">${item.newPath}</small></div>`;
+                        });
+                    }
+                    
+                    if (data.notFound && data.notFound.length > 0) {
+                        data.notFound.slice(0, 10).forEach(item => {
+                            html += `<div class="result-item skip">○ 未找到: ${item.title}</div>`;
+                        });
+                        if (data.notFound.length > 10) {
+                            html += `<div class="result-item skip">... 还有 ${data.notFound.length - 10} 个未找到</div>`;
+                        }
+                    }
+                    
+                    html += `<div class="result-summary">
+                        已更新: ${data.updated?.length || 0} 个 | 
+                        未匹配: ${data.notFound?.length || 0} 个
+                    </div>`;
+                    
+                    resultDiv.innerHTML = html;
+                    savePaths();
+                } else {
+                    resultDiv.innerHTML = `<div class="result-item error">执行失败: ${result.error || result.message || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-item error">请求失败: ${error.message}</div>`;
+            } finally {
+                executeBtn.disabled = false;
+                executeBtn.textContent = '执行更新';
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSavedPaths();
+        });
+    </script>
+</body>
+</html>

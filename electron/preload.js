@@ -28,5 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     onWindowUnmaximized: (callback) => {
         ipcRenderer.on('window-unmaximized', () => callback());
-    }
+    },
+    
+    selectFolder: () => ipcRenderer.invoke('select-folder'),
+    scanVideoFolder: (folderPath) => ipcRenderer.invoke('scan-video-folder', folderPath),
+    
+    getSavedPaths: () => ipcRenderer.invoke('get-saved-paths'),
+    savePaths: (paths) => ipcRenderer.invoke('save-paths', paths)
 });

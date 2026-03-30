@@ -5,6 +5,7 @@ const fs = require('fs');
 const SERVER_URL = 'http://localhost:5000';
 const SERVER_SCRIPT = path.join(__dirname, '..', 'web_app.py');
 const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+const PATHS_FILE = path.join(app.getPath('userData'), 'saved-paths.json');
 const MAX_STATE_RECORDS = 10;
 
 let mainWindow = null;
@@ -127,6 +128,95 @@ ipcMain.handle('get-window-bounds', () => {
     };
 });
 
+const VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.3gp', '.ogv'];
+
+ipcMain.handle('select-folder', async () => {
+    if (!mainWindow) return null;
+    
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: '选择视频文件夹'
+    });
+    
+    if (result.canceled || result.filePaths.length === 0) {
+        return null;
+    }
+    
+    return result.filePaths[0];
+});
+
+ipcMain.handle('scan-video-folder', async (event, folderPath) => {
+    if (!folderPath || !fs.existsSync(folderPath)) {
+        return { success: false, error: '文件夹不存在' };
+    }
+    
+    try {
+        const videoFiles = [];
+        
+        function scanDirectory(dir, baseDir) {
+            const items = fs.readdirSync(dir);
+            
+            for (const item of items) {
+                const fullPath = path.join(dir, item);
+                const stat = fs.statSync(fullPath);
+                
+                if (stat.isDirectory()) {
+                    scanDirectory(fullPath, baseDir);
+                } else if (stat.isFile()) {
+                    const ext = path.extname(item).toLowerCase();
+                    if (VIDEO_EXTENSIONS.includes(ext)) {
+                        const relativePath = path.relative(baseDir, fullPath);
+                        videoFiles.push({
+                            name: item,
+                            path: fullPath,
+                            relativePath: relativePath,
+                            title: path.basename(item, ext),
+                            size: stat.size
+                        });
+                    }
+                }
+            }
+        }
+        
+        scanDirectory(folderPath, folderPath);
+        
+        videoFiles.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+        
+        return {
+            success: true,
+            folderPath: folderPath,
+            videoCount: videoFiles.length,
+            videos: videoFiles
+        };
+    } catch (err) {
+        console.error('[Scan] Error scanning folder:', err);
+        return { success: false, error: err.message };
+    }
+});
+
+ipcMain.handle('get-saved-paths', async () => {
+    try {
+        if (fs.existsSync(PATHS_FILE)) {
+            const data = fs.readFileSync(PATHS_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('[Paths] Failed to load saved paths:', err);
+    }
+    return {};
+});
+
+ipcMain.handle('save-paths', async (event, paths) => {
+    try {
+        fs.writeFileSync(PATHS_FILE, JSON.stringify(paths, null, 2));
+        console.log('[Paths] Saved paths:', paths);
+        return { success: true };
+    } catch (err) {
+        console.error('[Paths] Failed to save paths:', err);
+        return { success: false, error: err.message };
+    }
+});
+
 function startAutoSave() {
     if (autoSaveInterval) {
         clearInterval(autoSaveInterval);
@@ -165,7 +255,7 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
-            webSecurity: true
+            webSecurity: false
         },
         show: false
     };

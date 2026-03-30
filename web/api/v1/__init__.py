@@ -28,6 +28,8 @@ from web.api.v1.tags import tags_bp
 from web.api.v1.cache import cache_bp
 from web.api.v1.stats import stats_bp
 from web.api.v1.tasks import tasks_bp
+from web.api.v1.import_video import import_bp
+from web.api.v1.tools import tools_bp
 from web.api.docs import docs_bp
 
 api_v1_bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
@@ -55,6 +57,8 @@ def register_api_v1_blueprints(app):
     api_v1_bp.register_blueprint(cache_bp)
     api_v1_bp.register_blueprint(stats_bp)
     api_v1_bp.register_blueprint(tasks_bp)
+    api_v1_bp.register_blueprint(import_bp)
+    api_v1_bp.register_blueprint(tools_bp)
     
     app.register_blueprint(api_v1_bp)
     app.register_blueprint(docs_bp)

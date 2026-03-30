@@ -530,6 +530,10 @@ function openRandomRecommend() {
     window.location.href = `/random-recommend?filter=${params}`;
 }
 
+function openVideoImport() {
+    window.location.href = '/video-import';
+}
+
 function logout() {
     window.location.href = '/logout';
 }
@@ -697,6 +701,7 @@ window.goToAdvancedFilterPage = goToAdvancedFilterPage;
 window.openClockWallpaper = openClockWallpaper;
 window.openMultiPlay = openMultiPlay;
 window.openRandomRecommend = openRandomRecommend;
+window.openVideoImport = openVideoImport;
 window.toggleMobileSidebar = toggleMobileSidebar;
 window.openMobileSidebar = openMobileSidebar;
 window.closeMobileSidebar = closeMobileSidebar;

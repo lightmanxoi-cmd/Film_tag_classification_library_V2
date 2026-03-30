@@ -111,3 +111,26 @@ def random_recommend():
         templates/random_recommend.html
     """
     return render_template('random_recommend.html')
+
+
+@pages_bp.route('/video-import')
+@login_required
+def video_import():
+    """
+    视频导入页面
+    
+    用于导入视频并添加标签的页面。
+    
+    Returns:
+        HTML: 视频导入模板
+    
+    Features:
+        - 文件夹选择
+        - 视频预览播放
+        - 多级标签选择
+        - 标签导入
+    
+    Template:
+        templates/video_import.html
+    """
+    return render_template('video_import.html')

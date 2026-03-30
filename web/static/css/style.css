@@ -1011,6 +1011,25 @@ body {
     cursor: not-allowed;
 }
 
+.video-import-btn {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: #e50914;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+    border-radius: 4px;
+    margin-left: 8px;
+}
+
+.video-import-btn:hover {
+    background: #f40612;
+}
+
 .advanced-filter-modal {
     display: none;
     position: fixed;
