@@ -6,6 +6,10 @@ API v1 标签路由模块
 路由列表：
     GET    /tags/tree           # 获取标签树结构
     GET    /tags/<tag_id>/videos  # 获取标签下的视频列表
+    POST   /tags                # 创建标签
+    PUT    /tags/<tag_id>       # 更新标签（重命名/修改层级）
+    DELETE /tags/<tag_id>       # 删除标签
+    POST   /tags/merge          # 合并标签
 
 功能特点：
     - 支持层级标签结构
@@ -18,6 +22,25 @@ API v1 标签路由模块
     
     # 获取标签下的视频
     GET /api/v1/tags/1/videos?page=1&page_size=50
+    
+    # 创建标签
+    POST /api/v1/tags
+    {"name": "新标签", "parent_id": null}
+    
+    # 重命名标签
+    PUT /api/v1/tags/1
+    {"name": "新名称"}
+    
+    # 修改标签层级
+    PUT /api/v1/tags/1
+    {"parent_id": 2}
+    
+    # 删除标签
+    DELETE /api/v1/tags/1
+    
+    # 合并标签
+    POST /api/v1/tags/merge
+    {"source_tag_id": 1, "target_tag_id": 2}
 
 标签树结构：
     [
@@ -45,6 +68,13 @@ from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
+from video_tag_system.models.tag import TagCreate, TagUpdate, TagMergeRequest
+from video_tag_system.exceptions import (
+    TagNotFoundError,
+    DuplicateTagError,
+    ValidationError,
+    TagMergeError
+)
 
 tags_bp = Blueprint('tags', __name__, url_prefix='/tags')
 
@@ -202,3 +232,202 @@ def get_videos_by_tag(tag_id):
     
     cache.set(cache_key, response_data, ttl=60)
     return APIResponse.success(data=response_data, cached=False)
+
+
+@tags_bp.route('', methods=['POST'])
+@login_required
+@handle_exceptions
+def create_tag():
+    """
+    创建标签
+    
+    创建一级标签或二级标签。
+    
+    Request Body:
+        name: 标签名称
+        parent_id: 父标签ID（可选，创建二级标签时需要）
+    
+    Returns:
+        JSON响应，包含创建的标签信息
+    
+    Example:
+        POST /api/v1/tags
+        {"name": "新标签"}
+        
+        POST /api/v1/tags
+        {"name": "子标签", "parent_id": 1}
+    """
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    parent_id = data.get('parent_id')
+    
+    if not name:
+        return APIResponse.error('标签名称不能为空', status_code=400)
+    
+    _, tag_svc, _, _ = get_services()
+    
+    try:
+        tag_data = TagCreate(name=name, parent_id=parent_id)
+        tag = tag_svc.create_tag(tag_data)
+        
+        cache = get_cache()
+        cache.delete(CACHE_KEYS['tag_tree'])
+        
+        return APIResponse.success(data={
+            'id': tag.id,
+            'name': tag.name,
+            'parent_id': tag.parent_id,
+            'level': tag.level
+        })
+    except (TagNotFoundError, DuplicateTagError, ValidationError) as e:
+        return APIResponse.error(str(e), status_code=400)
+
+
+@tags_bp.route('/<int:tag_id>', methods=['PUT'])
+@login_required
+@handle_exceptions
+def update_tag(tag_id):
+    """
+    更新标签
+    
+    支持重命名和修改层级。
+    
+    Args:
+        tag_id: 标签ID
+    
+    Request Body:
+        name: 新名称（可选）
+        parent_id: 新父标签ID（可选，null表示提升为一级标签）
+    
+    Returns:
+        JSON响应，包含更新后的标签信息
+    
+    Example:
+        PUT /api/v1/tags/1
+        {"name": "新名称"}
+        
+        PUT /api/v1/tags/1
+        {"parent_id": 2}
+    """
+    data = request.get_json()
+    name = data.get('name')
+    parent_id = data.get('parent_id')
+    
+    if name is not None:
+        name = name.strip()
+        if not name:
+            return APIResponse.error('标签名称不能为空', status_code=400)
+    
+    _, tag_svc, _, _ = get_services()
+    
+    try:
+        tag_data = TagUpdate(name=name, parent_id=parent_id)
+        tag = tag_svc.update_tag(tag_id, tag_data)
+        
+        cache = get_cache()
+        cache.delete(CACHE_KEYS['tag_tree'])
+        
+        return APIResponse.success(data={
+            'id': tag.id,
+            'name': tag.name,
+            'parent_id': tag.parent_id,
+            'level': tag.level
+        })
+    except (TagNotFoundError, DuplicateTagError, ValidationError) as e:
+        return APIResponse.error(str(e), status_code=400)
+
+
+@tags_bp.route('/<int:tag_id>', methods=['DELETE'])
+@login_required
+@handle_exceptions
+def delete_tag(tag_id):
+    """
+    删除标签
+    
+    删除指定标签。如果标签有子标签，需要先删除子标签。
+    
+    Args:
+        tag_id: 标签ID
+    
+    Returns:
+        JSON响应
+    
+    Example:
+        DELETE /api/v1/tags/1
+    """
+    _, tag_svc, video_tag_svc, _ = get_services()
+    
+    try:
+        video_count = video_tag_svc.get_tag_video_count(tag_id)
+        tag = tag_svc.get_tag(tag_id)
+        children_count = len(tag.children) if tag.children else 0
+        
+        if children_count > 0:
+            return APIResponse.error(
+                f'该标签下有 {children_count} 个子标签，请先删除或移动子标签',
+                status_code=400
+            )
+        
+        tag_svc.delete_tag(tag_id)
+        
+        cache = get_cache()
+        cache.delete(CACHE_KEYS['tag_tree'])
+        
+        return APIResponse.success(data={
+            'deleted_video_relations': video_count
+        })
+    except TagNotFoundError as e:
+        return APIResponse.error(str(e), status_code=404)
+    except ValidationError as e:
+        return APIResponse.error(str(e), status_code=400)
+
+
+@tags_bp.route('/merge', methods=['POST'])
+@login_required
+@handle_exceptions
+def merge_tags():
+    """
+    合并标签
+    
+    将源标签的所有视频关联转移到目标标签，然后删除源标签。
+    
+    Request Body:
+        source_tag_id: 源标签ID（将被删除）
+        target_tag_id: 目标标签ID
+    
+    Returns:
+        JSON响应，包含转移的关联数量
+    
+    Example:
+        POST /api/v1/tags/merge
+        {"source_tag_id": 1, "target_tag_id": 2}
+    """
+    data = request.get_json()
+    source_tag_id = data.get('source_tag_id')
+    target_tag_id = data.get('target_tag_id')
+    
+    if not source_tag_id or not target_tag_id:
+        return APIResponse.error('请提供源标签和目标标签ID', status_code=400)
+    
+    if source_tag_id == target_tag_id:
+        return APIResponse.error('源标签和目标标签不能相同', status_code=400)
+    
+    _, tag_svc, _, _ = get_services()
+    
+    try:
+        merge_data = TagMergeRequest(
+            source_tag_id=source_tag_id,
+            target_tag_id=target_tag_id
+        )
+        result = tag_svc.merge_tags(merge_data)
+        
+        cache = get_cache()
+        cache.delete(CACHE_KEYS['tag_tree'])
+        
+        return APIResponse.success(data={
+            'transferred_relations': result['transferred_relations'],
+            'source_tag_id': source_tag_id,
+            'target_tag_id': target_tag_id
+        })
+    except (TagNotFoundError, TagMergeError) as e:
+        return APIResponse.error(str(e), status_code=400)

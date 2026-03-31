@@ -1062,6 +1062,69 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        .tag-editor-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 12px;
+        }
+
+        .tag-editor-tabs .tab-btn {
+            flex: 1;
+            padding: 10px 16px;
+            background: #1a1a1a;
+            border: none;
+            border-radius: 4px;
+            color: #999;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .tag-editor-tabs .tab-btn:hover {
+            background: #252525;
+            color: #fff;
+        }
+
+        .tag-editor-tabs .tab-btn.active {
+            background: #e50914;
+            color: #fff;
+        }
+
+        .tag-editor-content select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .tag-editor-content select:focus {
+            outline: none;
+            border-color: #e50914;
+        }
+
+        .tag-editor-result {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .tag-editor-result.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+
+        .tag-editor-result.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
     </style>
 </head>
 <body>
@@ -1081,6 +1144,12 @@
                     <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                 </svg>
                 更新路径
+            </button>
+            <button class="nav-tool-btn" onclick="showTagEditorDialog()" title="编辑标签（创建、删除、重命名、合并）">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                </svg>
+                标签编辑
             </button>
             <a href="/" class="back-btn">
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1277,6 +1346,101 @@
         </div>
     </div>
 
+    <div class="tool-dialog" id="tagEditorDialog">
+        <div class="tool-dialog-content" style="max-width: 700px;">
+            <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
+                </svg>
+                标签编辑
+            </h3>
+            <p class="description">管理视频标签：创建、删除、重命名、修改层级、合并标签。</p>
+            
+            <div class="tag-editor-tabs">
+                <button class="tab-btn active" onclick="switchTagEditorTab('create')">创建标签</button>
+                <button class="tab-btn" onclick="switchTagEditorTab('rename')">重命名</button>
+                <button class="tab-btn" onclick="switchTagEditorTab('delete')">删除</button>
+                <button class="tab-btn" onclick="switchTagEditorTab('merge')">合并</button>
+            </div>
+            
+            <div class="tag-editor-content">
+                <div class="editor-panel" id="createTagPanel">
+                    <div class="form-group">
+                        <label>标签名称</label>
+                        <input type="text" id="newTagName" placeholder="输入标签名称">
+                    </div>
+                    <div class="form-group">
+                        <label>父标签（可选，留空创建一级标签）</label>
+                        <select id="newTagParent">
+                            <option value="">无（一级标签）</option>
+                        </select>
+                    </div>
+                    <div class="tool-dialog-buttons" style="margin-top: 16px;">
+                        <button class="btn-cancel" onclick="closeTagEditorDialog()">关闭</button>
+                        <button class="btn-execute" onclick="createTag()">创建标签</button>
+                    </div>
+                </div>
+                
+                <div class="editor-panel" id="renameTagPanel" style="display: none;">
+                    <div class="form-group">
+                        <label>选择要重命名的标签</label>
+                        <select id="renameTagSelect">
+                            <option value="">请选择标签</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>新名称</label>
+                        <input type="text" id="renameTagNewName" placeholder="输入新名称">
+                    </div>
+                    <div class="tool-dialog-buttons" style="margin-top: 16px;">
+                        <button class="btn-cancel" onclick="closeTagEditorDialog()">关闭</button>
+                        <button class="btn-execute" onclick="renameTag()">重命名</button>
+                    </div>
+                </div>
+                
+                <div class="editor-panel" id="deleteTagPanel" style="display: none;">
+                    <div class="form-group">
+                        <label>选择要删除的标签</label>
+                        <select id="deleteTagSelect">
+                            <option value="">请选择标签</option>
+                        </select>
+                    </div>
+                    <div id="deleteTagInfo" style="display: none; padding: 12px; background: #1a1a1a; border-radius: 4px; margin-top: 8px;">
+                        <div id="deleteTagDetails"></div>
+                    </div>
+                    <div class="tool-dialog-buttons" style="margin-top: 16px;">
+                        <button class="btn-cancel" onclick="closeTagEditorDialog()">关闭</button>
+                        <button class="btn-execute" style="background: #f44336;" onclick="deleteTag()">删除标签</button>
+                    </div>
+                </div>
+                
+                <div class="editor-panel" id="mergeTagPanel" style="display: none;">
+                    <div class="form-group">
+                        <label>源标签（将被删除）</label>
+                        <select id="mergeSourceTag">
+                            <option value="">请选择源标签</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>目标标签（将保留）</label>
+                        <select id="mergeTargetTag">
+                            <option value="">请选择目标标签</option>
+                        </select>
+                    </div>
+                    <p style="font-size: 12px; color: #888; margin-bottom: 16px;">
+                        合并后，源标签的所有视频关联将转移到目标标签，然后源标签将被删除。
+                    </p>
+                    <div class="tool-dialog-buttons" style="margin-top: 16px;">
+                        <button class="btn-cancel" onclick="closeTagEditorDialog()">关闭</button>
+                        <button class="btn-execute" style="background: #ff9800;" onclick="mergeTags()">合并标签</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tag-editor-result" id="tagEditorResult" style="display: none;"></div>
+        </div>
+    </div>
+
     <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     <script src="/static/js/app.js" type="module"></script>
     <script type="module">
@@ -1323,22 +1487,29 @@
             column2.innerHTML = '';
             column3.innerHTML = '';
 
-            const totalCategories = tagTree.length;
-            const perColumn = Math.ceil(totalCategories / 3);
-            
-            const categories1 = tagTree.slice(0, perColumn);
-            const categories2 = tagTree.slice(perColumn, perColumn * 2);
-            const categories3 = tagTree.slice(perColumn * 2);
+            const column1Tags = [];
+            const column2Tags = [];
+            const column3Tags = [];
 
-            categories1.forEach(category => {
+            tagTree.forEach(category => {
+                if (category.name === '演员') {
+                    column1Tags.push(category);
+                } else if (category.name === '类型' || category.name === '袜子类型') {
+                    column2Tags.push(category);
+                } else {
+                    column3Tags.push(category);
+                }
+            });
+
+            column1Tags.forEach(category => {
                 column1.appendChild(createCategoryElement(category));
             });
 
-            categories2.forEach(category => {
+            column2Tags.forEach(category => {
                 column2.appendChild(createCategoryElement(category));
             });
 
-            categories3.forEach(category => {
+            column3Tags.forEach(category => {
                 column3.appendChild(createCategoryElement(category));
             });
         }
@@ -2072,6 +2243,257 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSavedPaths();
         });
+
+        window.showTagEditorDialog = async function() {
+            await loadTagTreeForEditor();
+            document.getElementById('tagEditorDialog').classList.add('show');
+            document.getElementById('tagEditorResult').style.display = 'none';
+        };
+
+        window.closeTagEditorDialog = function() {
+            document.getElementById('tagEditorDialog').classList.remove('show');
+        };
+
+        window.switchTagEditorTab = function(tab) {
+            const tabs = document.querySelectorAll('.tag-editor-tabs .tab-btn');
+            const panels = document.querySelectorAll('.tag-editor-content .editor-panel');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.style.display = 'none');
+            
+            event.target.classList.add('active');
+            document.getElementById(tab + 'TagPanel').style.display = 'block';
+            
+            document.getElementById('tagEditorResult').style.display = 'none';
+        };
+
+        async function loadTagTreeForEditor() {
+            try {
+                const response = await fetchWithAuth('/api/v1/tags/tree');
+                const result = await response.json();
+                
+                if (result.success) {
+                    populateTagSelects(result.data);
+                }
+            } catch (error) {
+                console.error('加载标签树失败:', error);
+            }
+        }
+
+        function populateTagSelects(tags) {
+            const parentSelect = document.getElementById('newTagParent');
+            const renameSelect = document.getElementById('renameTagSelect');
+            const deleteSelect = document.getElementById('deleteTagSelect');
+            const mergeSourceSelect = document.getElementById('mergeSourceTag');
+            const mergeTargetSelect = document.getElementById('mergeTargetTag');
+            
+            parentSelect.innerHTML = '<option value="">无（一级标签）</option>';
+            renameSelect.innerHTML = '<option value="">请选择标签</option>';
+            deleteSelect.innerHTML = '<option value="">请选择标签</option>';
+            mergeSourceSelect.innerHTML = '<option value="">请选择源标签</option>';
+            mergeTargetSelect.innerHTML = '<option value="">请选择目标标签</option>';
+            
+            tags.forEach(category => {
+                parentSelect.innerHTML += `<option value="${category.id}">${category.name}</option>`;
+                renameSelect.innerHTML += `<option value="${category.id}">${category.name} (一级)</option>`;
+                deleteSelect.innerHTML += `<option value="${category.id}" data-video-count="${category.children?.reduce((sum, c) => sum + (c.video_count || 0), 0) || 0}" data-children="${category.children?.length || 0}">${category.name} (一级)</option>`;
+                mergeSourceSelect.innerHTML += `<option value="${category.id}">${category.name} (一级)</option>`;
+                mergeTargetSelect.innerHTML += `<option value="${category.id}">${category.name} (一级)</option>`;
+                
+                if (category.children && category.children.length > 0) {
+                    category.children.forEach(child => {
+                        renameSelect.innerHTML += `<option value="${child.id}">  └ ${child.name} (${category.name})</option>`;
+                        deleteSelect.innerHTML += `<option value="${child.id}" data-video-count="${child.video_count || 0}" data-children="0">  └ ${child.name} (${category.name})</option>`;
+                        mergeSourceSelect.innerHTML += `<option value="${child.id}">  └ ${child.name} (${category.name})</option>`;
+                        mergeTargetSelect.innerHTML += `<option value="${child.id}">  └ ${child.name} (${category.name})</option>`;
+                    });
+                }
+            });
+            
+            deleteSelect.addEventListener('change', function() {
+                const selected = this.options[this.selectedIndex];
+                const infoDiv = document.getElementById('deleteTagInfo');
+                const detailsDiv = document.getElementById('deleteTagDetails');
+                
+                if (this.value) {
+                    const videoCount = selected.dataset.videoCount || 0;
+                    const childrenCount = selected.dataset.children || 0;
+                    
+                    let html = `<p style="margin-bottom: 8px;"><strong>标签:</strong> ${selected.text}</p>`;
+                    html += `<p style="margin-bottom: 8px;"><strong>关联视频:</strong> ${videoCount} 个</p>`;
+                    
+                    if (parseInt(childrenCount) > 0) {
+                        html += `<p style="color: #f44336;"><strong>警告:</strong> 该标签有 ${childrenCount} 个子标签，需要先删除子标签</p>`;
+                    }
+                    
+                    detailsDiv.innerHTML = html;
+                    infoDiv.style.display = 'block';
+                } else {
+                    infoDiv.style.display = 'none';
+                }
+            });
+        }
+
+        window.createTag = async function() {
+            const name = document.getElementById('newTagName').value.trim();
+            const parentId = document.getElementById('newTagParent').value || null;
+            
+            if (!name) {
+                showTagEditorResult('请输入标签名称', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetchWithAuth('/api/v1/tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, parent_id: parentId ? parseInt(parentId) : null })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTagEditorResult(`标签 "${name}" 创建成功 (ID: ${result.data.id})`, 'success');
+                    document.getElementById('newTagName').value = '';
+                    await loadTagTree();
+                    await loadTagTreeForEditor();
+                } else {
+                    showTagEditorResult(result.error || '创建失败', 'error');
+                }
+            } catch (error) {
+                showTagEditorResult('请求失败: ' + error.message, 'error');
+            }
+        };
+
+        window.renameTag = async function() {
+            const tagId = document.getElementById('renameTagSelect').value;
+            const newName = document.getElementById('renameTagNewName').value.trim();
+            
+            if (!tagId) {
+                showTagEditorResult('请选择要重命名的标签', 'error');
+                return;
+            }
+            
+            if (!newName) {
+                showTagEditorResult('请输入新名称', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetchWithAuth(`/api/v1/tags/${tagId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTagEditorResult(`标签已重命名为 "${newName}"`, 'success');
+                    document.getElementById('renameTagNewName').value = '';
+                    await loadTagTree();
+                    await loadTagTreeForEditor();
+                } else {
+                    showTagEditorResult(result.error || '重命名失败', 'error');
+                }
+            } catch (error) {
+                showTagEditorResult('请求失败: ' + error.message, 'error');
+            }
+        };
+
+        window.deleteTag = async function() {
+            const tagId = document.getElementById('deleteTagSelect').value;
+            
+            if (!tagId) {
+                showTagEditorResult('请选择要删除的标签', 'error');
+                return;
+            }
+            
+            const select = document.getElementById('deleteTagSelect');
+            const selected = select.options[select.selectedIndex];
+            const childrenCount = parseInt(selected.dataset.children || 0);
+            
+            if (childrenCount > 0) {
+                showTagEditorResult('该标签有子标签，请先删除子标签', 'error');
+                return;
+            }
+            
+            if (!confirm(`确定要删除标签 "${selected.text}" 吗？\n该操作不可撤销。`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetchWithAuth(`/api/v1/tags/${tagId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTagEditorResult(`标签已删除，移除了 ${result.data.deleted_video_relations} 个视频关联`, 'success');
+                    await loadTagTree();
+                    await loadTagTreeForEditor();
+                } else {
+                    showTagEditorResult(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showTagEditorResult('请求失败: ' + error.message, 'error');
+            }
+        };
+
+        window.mergeTags = async function() {
+            const sourceId = document.getElementById('mergeSourceTag').value;
+            const targetId = document.getElementById('mergeTargetTag').value;
+            
+            if (!sourceId || !targetId) {
+                showTagEditorResult('请选择源标签和目标标签', 'error');
+                return;
+            }
+            
+            if (sourceId === targetId) {
+                showTagEditorResult('源标签和目标标签不能相同', 'error');
+                return;
+            }
+            
+            const sourceSelect = document.getElementById('mergeSourceTag');
+            const targetSelect = document.getElementById('mergeTargetTag');
+            const sourceName = sourceSelect.options[sourceSelect.selectedIndex].text;
+            const targetName = targetSelect.options[targetSelect.selectedIndex].text;
+            
+            if (!confirm(`确定要将 "${sourceName}" 合并到 "${targetName}" 吗？\n源标签将被删除，其视频关联将转移到目标标签。`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetchWithAuth('/api/v1/tags/merge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        source_tag_id: parseInt(sourceId), 
+                        target_tag_id: parseInt(targetId) 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTagEditorResult(`合并成功，转移了 ${result.data.transferred_relations} 个视频关联`, 'success');
+                    await loadTagTree();
+                    await loadTagTreeForEditor();
+                } else {
+                    showTagEditorResult(result.error || '合并失败', 'error');
+                }
+            } catch (error) {
+                showTagEditorResult('请求失败: ' + error.message, 'error');
+            }
+        };
+
+        function showTagEditorResult(message, type) {
+            const resultDiv = document.getElementById('tagEditorResult');
+            resultDiv.textContent = message;
+            resultDiv.className = 'tag-editor-result ' + type;
+            resultDiv.style.display = 'block';
+        }
     </script>
 </body>
 </html>
