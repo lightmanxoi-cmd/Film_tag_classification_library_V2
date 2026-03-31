@@ -125,14 +125,15 @@
 
     .sidebar {
         position: fixed;
-        top: 56px;
+        top: 62px;
         left: 0;
         width: 280px;
-        height: calc(100vh - 56px);
+        height: calc(100vh - 62px);
         transform: translateX(-100%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 999;
         padding: 16px;
+        padding-top: 20px;
         padding-bottom: env(safe-area-inset-bottom, 16px);
     }
 

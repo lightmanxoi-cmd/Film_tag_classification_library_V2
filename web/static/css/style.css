@@ -290,8 +290,9 @@ body {
     width: 280px;
     background: #0a0a0a;
     padding: 20px;
+    padding-top: 24px;
     position: fixed;
-    top: 64px;
+    top: 70px;
     left: 0;
     bottom: 0;
     overflow-y: auto;

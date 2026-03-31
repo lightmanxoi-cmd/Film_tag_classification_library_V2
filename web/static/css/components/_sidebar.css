@@ -1,12 +1,13 @@
 .sidebar {
     position: fixed;
-    top: 64px;
+    top: 70px;
     left: 0;
     bottom: 0;
     width: 280px;
     background: rgba(20, 20, 20, 0.95);
     border-right: 1px solid rgba(255,255,255,0.1);
     padding: 20px;
+    padding-top: 24px;
     overflow-y: auto;
     z-index: 100;
     backdrop-filter: blur(10px);
