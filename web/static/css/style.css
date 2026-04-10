@@ -27,6 +27,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     padding: 0 40px;
     z-index: 1000;
     backdrop-filter: blur(10px);
@@ -1278,8 +1279,50 @@ body {
 
 @media (max-width: 768px) {
     .navbar {
-        padding: 0 16px;
-        height: 56px;
+        padding: 8px 16px;
+        height: auto;
+        min-height: 56px;
+        flex-wrap: wrap;
+    }
+    
+    .nav-actions {
+        order: 10;
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px 0 2px;
+        scrollbar-width: none;
+    }
+    
+    .nav-actions::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .nav-actions .clock-wallpaper-btn,
+    .nav-actions .multi-play-btn,
+    .nav-actions .random-recommend-btn,
+    .nav-actions .video-import-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+        margin-left: 0;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    
+    .nav-actions .fullscreen-btn,
+    .nav-actions .shuffle-btn {
+        width: 32px;
+        height: 32px;
+        margin-left: 0;
+        flex-shrink: 0;
+    }
+    
+    .nav-actions .fullscreen-btn svg,
+    .nav-actions .shuffle-btn svg {
+        width: 16px;
+        height: 16px;
     }
     
     .mobile-menu-btn {
@@ -1380,7 +1423,7 @@ body {
     }
     
     .main-container {
-        margin-top: 56px;
+        margin-top: 90px;
     }
     
     .video-grid {
@@ -1558,15 +1601,28 @@ body {
 
 @media (max-width: 480px) {
     .navbar {
-        padding: 0 12px;
+        padding: 6px 12px;
     }
     
     .nav-brand .logo {
         font-size: 16px;
     }
     
+    .nav-actions {
+        gap: 4px;
+    }
+    
+    .nav-actions .clock-wallpaper-btn,
+    .nav-actions .multi-play-btn,
+    .nav-actions .random-recommend-btn,
+    .nav-actions .video-import-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+    
     .advanced-filter-btn {
-        padding: 8px 10px;
+        padding: 5px 8px;
+        font-size: 11px;
     }
     
     .content {
@@ -1735,12 +1791,13 @@ body {
         .navbar {
             padding-left: max(16px, env(safe-area-inset-left));
             padding-right: max(16px, env(safe-area-inset-right));
-            height: calc(56px + env(safe-area-inset-top));
+            height: auto;
+            min-height: calc(56px + env(safe-area-inset-top));
             padding-top: env(safe-area-inset-top);
         }
         
         .main-container {
-            margin-top: calc(56px + env(safe-area-inset-top));
+            margin-top: calc(90px + env(safe-area-inset-top));
         }
         
         .mobile-search-bar {
@@ -1748,7 +1805,7 @@ body {
         }
         
         .sidebar {
-            padding-top: calc(56px + env(safe-area-inset-top) + 14px);
+            padding-top: calc(70px + env(safe-area-inset-top));
         }
     }
 }

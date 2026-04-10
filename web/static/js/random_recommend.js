@@ -270,6 +270,8 @@ function playNextVideo() {
     video.src = `/video/stream/${videoData.id}`;
     videoName.textContent = videoData.title;
     
+    updateVideoTagsDisplay(videoData);
+    
     currentTime = 0;
     hasStarted = false;
     isPlaying = true;
@@ -720,6 +722,27 @@ function resetControlsTimeout() {
 function updateControlsVisibility() {
     topBar.classList.toggle('hidden', !showControls);
     controlsOverlay.classList.toggle('hidden', !showControls);
+}
+
+function updateVideoTagsDisplay(videoData) {
+    const tagsDisplay = document.getElementById('videoTagsDisplay');
+    if (!tagsDisplay) return;
+    
+    if (!videoData.tags || videoData.tags.length === 0) {
+        tagsDisplay.innerHTML = '';
+        return;
+    }
+    
+    const level2Tags = videoData.tags.filter(t => t.parent_id !== null && t.parent_id !== undefined);
+    
+    if (level2Tags.length === 0) {
+        tagsDisplay.innerHTML = '';
+        return;
+    }
+    
+    tagsDisplay.innerHTML = level2Tags.map(t => 
+        `<span class="tag-chip">${t.name}</span>`
+    ).join('');
 }
 
 /* ==================== 键盘事件处理 ==================== */

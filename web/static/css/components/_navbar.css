@@ -8,6 +8,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     padding: 0 40px;
     z-index: 1000;
     backdrop-filter: blur(10px);
@@ -128,7 +129,10 @@
 
 @media (max-width: 768px) {
     .navbar {
-        padding: 0 16px;
+        padding: 8px 16px;
+        height: auto;
+        min-height: 56px;
+        flex-wrap: wrap;
     }
     
     .mobile-menu-btn {
