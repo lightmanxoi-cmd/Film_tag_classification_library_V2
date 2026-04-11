@@ -16,7 +16,8 @@ API版本：
 import os
 from sqlalchemy import text
 
-from web.app import create_app, get_db_manager
+from web.app import create_app
+from video_tag_system.core.database import get_db_manager
 from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
 
 

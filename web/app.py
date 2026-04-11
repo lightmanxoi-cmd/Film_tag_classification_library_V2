@@ -39,7 +39,7 @@ import time
 import atexit
 from flask import Flask, g, request
 
-from video_tag_system.core.database import DatabaseManager
+from video_tag_system.core.database import DatabaseManager, get_db_manager as _core_get_db_manager
 from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
 from video_tag_system.utils.cache import query_cache
 from video_tag_system.utils.logger import get_logger, setup_logging, set_request_id, clear_request_id
@@ -55,7 +55,6 @@ from web.pages import pages_bp
 from web.api import register_api_v1_blueprints
 
 
-db_manager = None
 _last_cache_cleanup = time.time()
 CACHE_CLEANUP_INTERVAL = 300
 
@@ -64,7 +63,7 @@ def get_db_manager():
     """
     获取数据库管理器单例
     
-    创建或返回全局数据库管理器实例。
+    委托给 video_tag_system.core.database.get_db_manager 统一入口。
     首次调用时会创建表结构。
     
     Returns:
@@ -74,14 +73,9 @@ def get_db_manager():
         db = get_db_manager()
         session = db.session_factory()
     """
-    global db_manager
-    if db_manager is None:
-        db_manager = DatabaseManager(
-            database_url=config['default'].DATABASE_URL,
-            echo=config['default'].DATABASE_ECHO
-        )
-        db_manager.create_tables()
-    return db_manager
+    db = _core_get_db_manager()
+    db.create_tables()
+    return db
 
 
 def create_app(config_name: str = None) -> Flask:
@@ -247,16 +241,14 @@ def _register_legacy_routes(app: Flask):
     @app.route('/api/videos/by-tags', methods=['POST'])
     def legacy_videos_by_tags():
         """兼容旧的标签视频搜索路由"""
-        from flask import request, jsonify
-        from web.api.v1.videos import get_videos_by_multiple_tags
-        return get_videos_by_multiple_tags()
+        from flask import redirect
+        return redirect('/api/v1/videos/by-tags', code=307)
     
     @app.route('/api/videos/by-tags-advanced', methods=['POST'])
     def legacy_videos_by_tags_advanced():
         """兼容旧的高级标签搜索路由"""
-        from flask import request, jsonify
-        from web.api.v1.videos import get_videos_by_tags_advanced
-        return get_videos_by_tags_advanced()
+        from flask import redirect
+        return redirect('/api/v1/videos/by-tags-advanced', code=307)
     
     @app.route('/api/video/stream/<int:video_id>')
     def legacy_video_stream_url(video_id):
@@ -279,26 +271,26 @@ def _register_legacy_routes(app: Flask):
     @app.route('/api/cache/clear', methods=['POST'])
     def legacy_cache_clear():
         """兼容旧的缓存清除路由"""
-        from web.api.v1.cache import clear_cache
-        return clear_cache()
+        from flask import redirect
+        return redirect('/api/v1/cache/clear', code=307)
     
     @app.route('/api/cache/invalidate/<key_prefix>', methods=['POST'])
     def legacy_cache_invalidate(key_prefix):
         """兼容旧的缓存失效路由"""
-        from web.api.v1.cache import invalidate_cache
-        return invalidate_cache(key_prefix)
+        from flask import redirect
+        return redirect(f'/api/v1/cache/invalidate/{key_prefix}', code=307)
     
     @app.route('/api/generate-gif/<int:video_id>', methods=['POST'])
     def legacy_generate_gif(video_id):
         """兼容旧的GIF生成路由"""
-        from web.api.v1.videos import generate_gif_for_video
-        return generate_gif_for_video(video_id)
+        from flask import redirect
+        return redirect(f'/api/v1/videos/{video_id}/gif', code=307)
     
     @app.route('/api/change-password', methods=['POST'])
     def legacy_change_password():
         """兼容旧的密码修改路由"""
-        from web.auth.routes import change_password
-        return change_password()
+        from flask import redirect
+        return redirect('/api/v1/change-password', code=307)
 
 
 def _register_request_hooks(app: Flask):

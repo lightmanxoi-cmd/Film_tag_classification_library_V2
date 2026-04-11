@@ -67,6 +67,7 @@ from flask import Blueprint, request, g
 from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
+from web.services import ServiceLocator
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
 from video_tag_system.models.tag import TagCreate, TagUpdate, TagMergeRequest
 from video_tag_system.exceptions import (
@@ -77,17 +78,6 @@ from video_tag_system.exceptions import (
 )
 
 tags_bp = Blueprint('tags', __name__, url_prefix='/tags')
-
-
-def get_services():
-    """
-    获取服务实例
-    
-    Returns:
-        tuple: (video_service, tag_service, video_tag_service, db_session)
-    """
-    from web.services import get_services as _get_services
-    return _get_services()
 
 
 @tags_bp.route('/tree', methods=['GET'])
@@ -134,7 +124,7 @@ def get_tag_tree():
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    tag_svc = ServiceLocator.get_tag_service()
     
     tree = tag_svc.get_tag_tree()
     result = []
@@ -197,7 +187,7 @@ def get_videos_by_tag(tag_id):
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     
     result = video_svc.list_videos_by_tags(
         tag_ids=[tag_id],
@@ -264,7 +254,7 @@ def create_tag():
     if not name:
         return APIResponse.error('标签名称不能为空', status_code=400)
     
-    _, tag_svc, _, _ = get_services()
+    tag_svc = ServiceLocator.get_tag_service()
     
     try:
         tag_data = TagCreate(name=name, parent_id=parent_id)
@@ -318,7 +308,7 @@ def update_tag(tag_id):
         if not name:
             return APIResponse.error('标签名称不能为空', status_code=400)
     
-    _, tag_svc, _, _ = get_services()
+    tag_svc = ServiceLocator.get_tag_service()
     
     try:
         tag_data = TagUpdate(name=name, parent_id=parent_id)
@@ -355,7 +345,8 @@ def delete_tag(tag_id):
     Example:
         DELETE /api/v1/tags/1
     """
-    _, tag_svc, video_tag_svc, _ = get_services()
+    tag_svc = ServiceLocator.get_tag_service()
+    video_tag_svc = ServiceLocator.get_video_tag_service()
     
     try:
         video_count = video_tag_svc.get_tag_video_count(tag_id)
@@ -412,7 +403,7 @@ def merge_tags():
     if source_tag_id == target_tag_id:
         return APIResponse.error('源标签和目标标签不能相同', status_code=400)
     
-    _, tag_svc, _, _ = get_services()
+    tag_svc = ServiceLocator.get_tag_service()
     
     try:
         merge_data = TagMergeRequest(

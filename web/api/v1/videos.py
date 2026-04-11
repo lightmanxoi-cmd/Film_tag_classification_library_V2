@@ -40,20 +40,10 @@ from flask import Blueprint, request, send_file, Response
 from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
+from web.services import ServiceLocator
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
 
 videos_bp = Blueprint('videos', __name__, url_prefix='/videos')
-
-
-def get_services():
-    """
-    获取服务实例
-    
-    Returns:
-        tuple: (video_service, tag_service, video_tag_service, db_session)
-    """
-    from web.services import get_services as _get_services
-    return _get_services()
 
 
 @videos_bp.route('', methods=['GET'])
@@ -94,7 +84,8 @@ def get_videos():
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
+    tag_svc = ServiceLocator.get_tag_service()
     
     if not search and not show_all:
         from video_tag_system.models.tag import Tag
@@ -176,7 +167,7 @@ def get_video_detail(video_id):
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     
     video = video_svc.get_video(video_id)
     response_data = {
@@ -242,7 +233,7 @@ def get_videos_by_multiple_tags():
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     
     result = video_svc.list_videos_by_tags(
         tag_ids=tag_ids,
@@ -338,7 +329,7 @@ def get_videos_by_tags_advanced():
         if cached_result is not None:
             return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     
     result = video_svc.list_videos_by_tags_advanced(
         tags_by_category=tags_by_category,
@@ -599,7 +590,7 @@ def serve_video_by_id(video_id):
     start_time = time.time()
     config = _get_stream_config()
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     video = video_svc.get_video(video_id)
     full_path = video.file_path
     
@@ -712,7 +703,7 @@ def get_video_stream_url(video_id):
             }
         }
     """
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     video = video_svc.get_video(video_id)
     file_path = video.file_path
     file_ext = os.path.splitext(file_path)[1].lower()
@@ -752,7 +743,7 @@ def generate_gif_for_video(video_id):
             }
         }
     """
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     video = video_svc.get_video(video_id)
     video_title = video.title or os.path.basename(video.file_path)
     
@@ -816,7 +807,7 @@ def batch_generate_thumbnails():
     video_ids = data.get('video_ids', None)
     force = data.get('force', False)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     thumbnail_gen = get_thumbnail_generator()
     
     if video_ids:
@@ -894,7 +885,7 @@ def batch_generate_gifs():
     video_ids = data.get('video_ids', None)
     force = data.get('force', False)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     thumbnail_gen = get_thumbnail_generator()
     
     if video_ids:
@@ -954,7 +945,7 @@ def get_missing_thumbnails():
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 50, type=int)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     thumbnail_gen = get_thumbnail_generator()
     
     result = video_svc.list_videos(page=page, page_size=page_size)
@@ -1047,7 +1038,7 @@ def get_missing_gifs():
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 50, type=int)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     thumbnail_gen = get_thumbnail_generator()
     
     result = video_svc.list_videos(page=page, page_size=page_size)

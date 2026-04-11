@@ -41,7 +41,8 @@ API路由、页面路由、认证等。
     ├── pages/           # 页面路由
     └── static/          # 静态资源
 """
-from web.app import create_app, get_db_manager
-from web.services import get_services
+from web.app import create_app
+from web.services import ServiceLocator, get_services
+from video_tag_system.core.database import get_db_manager
 
-__all__ = ['create_app', 'get_services', 'get_db_manager']
+__all__ = ['create_app', 'get_services', 'get_db_manager', 'ServiceLocator']

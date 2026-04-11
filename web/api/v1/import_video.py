@@ -35,22 +35,12 @@ from flask import Blueprint, request, g
 from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
+from web.services import ServiceLocator
 
 import_bp = Blueprint('import', __name__, url_prefix='/import')
 
 
 VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg', '.3gp', '.ogv'}
-
-
-def get_services():
-    """
-    获取服务实例
-    
-    Returns:
-        tuple: (video_service, tag_service, video_tag_service, db_session)
-    """
-    from web.services import get_services as _get_services
-    return _get_services()
 
 
 def _is_video_file(filename: str) -> bool:
@@ -161,7 +151,7 @@ def check_video_exists():
     if not file_path and not title:
         return APIResponse.error('请提供文件路径或标题', status_code=400)
     
-    video_svc, _, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
     
     existing_video = None
     
@@ -254,7 +244,9 @@ def import_video():
     if not title:
         return APIResponse.error('无法确定视频标题', status_code=400)
     
-    video_svc, tag_svc, video_tag_svc, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
+    tag_svc = ServiceLocator.get_tag_service()
+    video_tag_svc = ServiceLocator.get_video_tag_service()
     
     all_tag_ids = set()
     
@@ -381,7 +373,9 @@ def batch_import_videos():
             if not os.path.exists(file_path):
                 raise ValueError(f'文件不存在: {file_path}')
             
-            video_svc, tag_svc, video_tag_svc, _ = get_services()
+            video_svc = ServiceLocator.get_video_service()
+            tag_svc = ServiceLocator.get_tag_service()
+            video_tag_svc = ServiceLocator.get_video_tag_service()
             
             filename = os.path.basename(file_path)
             title = os.path.splitext(filename)[0]

@@ -31,22 +31,12 @@ from flask import Blueprint
 from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
+from web.services import ServiceLocator
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
 from video_tag_system.utils.logger import metrics, get_logger
 
 logger = get_logger(__name__)
 stats_bp = Blueprint('stats', __name__, url_prefix='/stats')
-
-
-def get_services():
-    """
-    获取服务实例
-    
-    Returns:
-        tuple: (video_service, tag_service, video_tag_service, db_session)
-    """
-    from web.services import get_services as _get_services
-    return _get_services()
 
 
 @stats_bp.route('', methods=['GET'])
@@ -82,7 +72,8 @@ def get_stats():
     if cached_result is not None:
         return APIResponse.success(data=cached_result, cached=True)
     
-    video_svc, tag_svc, _, _ = get_services()
+    video_svc = ServiceLocator.get_video_service()
+    tag_svc = ServiceLocator.get_tag_service()
     
     video_count = video_svc.count_videos()
     tag_count = tag_svc.count_tags()
