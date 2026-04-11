@@ -7,6 +7,11 @@ export class ClockController {
         console.log('[ClockController] Initializing for page:', this.pageId);
         console.log('[ClockController] Clock element:', this.clockElement);
         
+        if (!this.clockElement) {
+            console.error('[ClockController] Clock element is null or undefined');
+            return;
+        }
+        
         this.clockTimeElement = this.clockElement.querySelector('.clock-time') || this.clockElement;
         console.log('[ClockController] Clock time element:', this.clockTimeElement);
         
@@ -29,10 +34,10 @@ export class ClockController {
         this.init();
     }
     
-    init() {
+    async init() {
         console.log('[ClockController] init() called');
         this.setupElectronEvents();
-        this.loadState();
+        await this.loadState();
         console.log('[ClockController] Loaded state:', this.state);
         this.applyState();
         this.setupDrag();
@@ -218,6 +223,15 @@ export class ClockController {
         this.clockElement.addEventListener('mousedown', (e) => this.startDrag(e));
         this.clockElement.addEventListener('touchstart', (e) => this.startDrag(e), { passive: false });
         
+        if (this.clockTimeElement && this.clockTimeElement !== this.clockElement) {
+            this.clockTimeElement.style.pointerEvents = 'auto';
+            this.clockTimeElement.style.cursor = 'move';
+            this.clockTimeElement.style.userSelect = 'none';
+            this.clockTimeElement.addEventListener('mousedown', (e) => this.startDrag(e));
+            this.clockTimeElement.addEventListener('touchstart', (e) => this.startDrag(e), { passive: false });
+            this.clockTimeElement.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
+        }
+        
         document.addEventListener('mousemove', (e) => this.drag(e));
         document.addEventListener('touchmove', (e) => this.drag(e), { passive: false });
         
@@ -225,10 +239,6 @@ export class ClockController {
         document.addEventListener('touchend', () => this.endDrag());
         
         this.clockElement.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
-        
-        if (this.clockTimeElement && this.clockTimeElement !== this.clockElement) {
-            this.clockTimeElement.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
-        }
     }
     
     handleWheel(e) {
@@ -250,6 +260,7 @@ export class ClockController {
         if (!this.state.visible) return;
         
         e.preventDefault();
+        e.stopPropagation();
         this.isDragging = true;
         
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -448,6 +459,8 @@ export function injectClockStyles() {
         
         .clock-overlay {
             pointer-events: auto;
+            cursor: move;
+            user-select: none;
             transition: opacity 0.3s ease, transform 0.1s ease;
         }
         
