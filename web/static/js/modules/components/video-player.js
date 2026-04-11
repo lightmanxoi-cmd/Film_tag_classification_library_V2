@@ -84,35 +84,78 @@ export class VideoPlayer {
             this.container.querySelector('.modal-content').insertBefore(videoElement, playerActions);
         }
         
-        this.player = videojs(this.videoElementId, {
-            fluid: true,
-            responsive: true,
-            muted: true,
-            playbackRates: [0.5, 1, 1.25, 1.5, 2],
-            controlBar: {
-                children: [
-                    'playToggle',
-                    'volumePanel',
-                    'currentTimeDisplay',
-                    'timeDivider',
-                    'durationDisplay',
-                    'progressControl',
-                    'playbackRateMenuButton',
-                    'fullscreenToggle'
-                ]
+        if (typeof videojs !== 'undefined') {
+            this.player = videojs(this.videoElementId, {
+                fluid: true,
+                responsive: true,
+                muted: true,
+                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                controlBar: {
+                    children: [
+                        'playToggle',
+                        'volumePanel',
+                        'currentTimeDisplay',
+                        'timeDivider',
+                        'durationDisplay',
+                        'progressControl',
+                        'playbackRateMenuButton',
+                        'fullscreenToggle'
+                    ]
+                }
+            });
+            
+            this.player.src({
+                src: data.stream_url,
+                type: this._getMimeType(data.file_ext)
+            });
+            
+            this.player.ready(function() {
+                this.play().catch(function(error) {
+                    console.log('自动播放失败，请手动点击播放:', error);
+                });
+            });
+        } else {
+            console.warn('Video.js 不可用，使用原生播放器');
+            let videoElement = document.getElementById(this.videoElementId);
+            if (!videoElement || videoElement.classList.contains('video-js')) {
+                const oldElement = videoElement;
+                videoElement = document.createElement('video');
+                videoElement.id = this.videoElementId;
+                videoElement.controls = true;
+                videoElement.preload = 'auto';
+                videoElement.style.width = '100%';
+                videoElement.setAttribute('playsinline', '');
+                
+                if (oldElement && oldElement.parentNode) {
+                    oldElement.parentNode.replaceChild(videoElement, oldElement);
+                } else {
+                    const playerActions = this.container.querySelector('.player-actions');
+                    this.container.querySelector('.modal-content').insertBefore(videoElement, playerActions);
+                }
             }
-        });
-        
-        this.player.src({
-            src: data.stream_url,
-            type: this._getMimeType(data.file_ext)
-        });
-        
-        this.player.ready(function() {
-            this.play().catch(function(error) {
+            
+            videoElement.src = data.stream_url;
+            videoElement.muted = true;
+            videoElement.play().catch(function(error) {
                 console.log('自动播放失败，请手动点击播放:', error);
             });
-        });
+            
+            this.player = {
+                play: () => videoElement.play(),
+                pause: () => videoElement.pause(),
+                dispose: () => {
+                    videoElement.pause();
+                    videoElement.src = '';
+                },
+                src: (src) => { videoElement.src = src.src; },
+                ready: (fn) => { 
+                    if (videoElement.readyState >= 1) fn.call({ play: () => videoElement.play() });
+                    else videoElement.addEventListener('loadedmetadata', fn);
+                },
+                on: (event, fn) => videoElement.addEventListener(event, fn),
+                paused: () => videoElement.paused
+            };
+        }
     }
 
     _getMimeType(ext) {

@@ -354,14 +354,6 @@ async function playVideo(videoIdOrVideo, title, tags, filePath) {
             };
         }
         
-        const player = videojs('videoPlayer', playerOptions);
-        setVideoPlayer(player);
-        
-        getVideoPlayer().src({
-            src: data.stream_url,
-            type: getMimeType(fileExt)
-        });
-        
         modal.classList.add('show');
         document.body.style.overflow = 'hidden';
         
@@ -369,27 +361,78 @@ async function playVideo(videoIdOrVideo, title, tags, filePath) {
             modal.classList.add('mobile-mode');
         }
         
-        getVideoPlayer().ready(function() {
-            this.play().catch(function(error) {
+        if (typeof videojs !== 'undefined') {
+            const player = videojs('videoPlayer', playerOptions);
+            setVideoPlayer(player);
+            
+            getVideoPlayer().src({
+                src: data.stream_url,
+                type: getMimeType(fileExt)
+            });
+            
+            getVideoPlayer().ready(function() {
+                this.play().catch(function(error) {
+                    console.log('自动播放失败，请手动点击播放:', error);
+                });
+                
+                if (isMobile) {
+                    this.on('fullscreenchange', function() {
+                        if (this.isFullscreen()) {
+                            modal.classList.add('is-fullscreen');
+                            if (screen.orientation && screen.orientation.lock) {
+                                screen.orientation.lock('landscape').catch(() => {});
+                            }
+                        } else {
+                            modal.classList.remove('is-fullscreen');
+                            if (screen.orientation && screen.orientation.unlock) {
+                                screen.orientation.unlock();
+                            }
+                        }
+                    });
+                }
+            });
+        } else {
+            console.warn('Video.js 不可用，使用原生播放器');
+            let videoElement = document.getElementById('videoPlayer');
+            if (!videoElement || videoElement.classList.contains('video-js')) {
+                const oldElement = videoElement;
+                videoElement = document.createElement('video');
+                videoElement.id = 'videoPlayer';
+                videoElement.controls = true;
+                videoElement.preload = 'auto';
+                videoElement.style.width = '100%';
+                videoElement.setAttribute('playsinline', '');
+                
+                if (oldElement && oldElement.parentNode) {
+                    oldElement.parentNode.replaceChild(videoElement, oldElement);
+                } else {
+                    const playerActions = document.querySelector('.player-actions');
+                    document.querySelector('.modal-content').insertBefore(videoElement, playerActions);
+                }
+            }
+            
+            videoElement.src = data.stream_url;
+            videoElement.muted = true;
+            videoElement.play().catch(function(error) {
                 console.log('自动播放失败，请手动点击播放:', error);
             });
             
-            if (isMobile) {
-                this.on('fullscreenchange', function() {
-                    if (this.isFullscreen()) {
-                        modal.classList.add('is-fullscreen');
-                        if (screen.orientation && screen.orientation.lock) {
-                            screen.orientation.lock('landscape').catch(() => {});
-                        }
-                    } else {
-                        modal.classList.remove('is-fullscreen');
-                        if (screen.orientation && screen.orientation.unlock) {
-                            screen.orientation.unlock();
-                        }
-                    }
-                });
-            }
-        });
+            setVideoPlayer({
+                play: () => videoElement.play(),
+                pause: () => videoElement.pause(),
+                dispose: () => {
+                    videoElement.pause();
+                    videoElement.src = '';
+                },
+                src: (src) => { videoElement.src = src.src; },
+                ready: (fn) => { 
+                    if (videoElement.readyState >= 1) fn.call({ play: () => videoElement.play() });
+                    else videoElement.addEventListener('loadedmetadata', fn);
+                },
+                on: (event, fn) => videoElement.addEventListener(event, fn),
+                paused: () => videoElement.paused
+            });
+        }
     } catch (error) {
         console.error('获取视频信息失败:', error);
         showToast('无法播放视频: ' + error.message, 'error');
