@@ -14,11 +14,28 @@ API版本：
 - /api/*: 兼容旧版API（重定向到v1）
 """
 import os
+from pathlib import Path
 from sqlalchemy import text
 
 from web.app import create_app
 from video_tag_system.core.database import get_db_manager
 from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+
+
+def load_env_file():
+    """加载 .env 文件到环境变量"""
+    env_file = Path('.env')
+    if env_file.exists():
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+        print("已加载 .env 配置文件")
 
 
 def update_thumbnails():
@@ -90,6 +107,8 @@ def run_server(app, debug=False):
 
 def main():
     """主入口函数"""
+    load_env_file()
+    
     config_name = os.environ.get('FLASK_ENV', 'development')
     debug_mode = config_name == 'development'
     app = create_app(config_name)
