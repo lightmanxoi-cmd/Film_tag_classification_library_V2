@@ -125,6 +125,7 @@ def get_tag_tree():
         return APIResponse.success(data=cached_result, cached=True)
     
     tag_svc = ServiceLocator.get_tag_service()
+    video_tag_svc = ServiceLocator.get_video_tag_service()
     
     tree = tag_svc.get_tag_tree()
     result = []

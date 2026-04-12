@@ -44,6 +44,7 @@ from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_b
 from video_tag_system.utils.cache import query_cache
 from video_tag_system.utils.logger import get_logger, setup_logging, set_request_id, clear_request_id
 from video_tag_system.utils.async_tasks import init_task_manager, get_task_manager
+from video_tag_system.utils.random_queue_manager import init_random_queue_manager, stop_random_queue_manager
 
 logger = get_logger(__name__)
 
@@ -383,6 +384,13 @@ def _init_database(app: Flask):
         logger.info("异步任务管理器初始化完成")
     except Exception as e:
         logger.warning(f"异步任务管理器初始化失败: {e}")
+    
+    try:
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+        init_random_queue_manager(db, data_dir=data_dir)
+        logger.info("随机队列管理器初始化完成")
+    except Exception as e:
+        logger.warning(f"随机队列管理器初始化失败: {e}")
 
 
 def _register_cleanup(app: Flask):
@@ -397,6 +405,12 @@ def _register_cleanup(app: Flask):
     
     def cleanup_on_exit():
         """应用退出时的清理函数"""
+        try:
+            stop_random_queue_manager()
+            logger.info("随机队列管理器已停止")
+        except Exception as e:
+            logger.warning(f"停止随机队列管理器失败: {e}")
+        
         try:
             stop_backup_scheduler()
             logger.info("备份调度器已停止")

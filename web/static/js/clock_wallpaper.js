@@ -221,18 +221,13 @@ async function loadVideos() {
  */
 async function loadVideosFromServer(autoPlay = true) {
     try {
-        const randomSeed = Date.now();
-        const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
+        const response = await fetchWithAuth('/api/v1/random-queue/rx/videos', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                tags_by_category: filterParams,
-                page: 1,
-                page_size: 10000,
-                random_order: true,
-                random_seed: randomSeed
+                tags_by_category: filterParams
             })
         });
         
@@ -279,9 +274,8 @@ function playNextVideo() {
     if (videos.length === 0) return;
     
     if (currentPlayIndex >= videos.length) {
-        console.log('[ClockWallpaper] 播放列表完成，重新加载随机列表');
-        loadVideosFromServer();
-        return;
+        console.log('[ClockWallpaper] 播放列表完成，循环播放');
+        currentPlayIndex = 0;
     }
     
     isSwitchingVideo = true;

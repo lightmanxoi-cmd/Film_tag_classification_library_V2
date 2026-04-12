@@ -45,6 +45,7 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
+data/
 
 # Thumbnails (generated)
 web/static/thumbnails/

@@ -267,6 +267,55 @@ class VideoRepository:
         self.session.flush()
         return count
     
+    def _apply_random_order(
+        self,
+        all_ids_stmt,
+        page: int,
+        page_size: int,
+        random_seed: Optional[int],
+        total: int
+    ) -> Optional[Tuple[List[Video], int]]:
+        """
+        应用随机排序并分页
+        
+        将重复的随机排序逻辑提取为公共方法：
+        1. 获取所有匹配的ID
+        2. 使用种子随机打乱
+        3. 按页码切片
+        4. 查询视频详情并保持随机顺序
+        
+        Args:
+            all_ids_stmt: 获取所有ID的SQL语句
+            page: 页码
+            page_size: 每页数量
+            random_seed: 随机种子
+            total: 总记录数
+        
+        Returns:
+            Optional[Tuple[List[Video], int]]: 随机排序结果，不需要随机排序时返回None
+        """
+        if random_seed is None:
+            return None
+        
+        random.seed(random_seed)
+        all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
+        random.shuffle(all_ids)
+        
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_ids = all_ids[start_idx:end_idx]
+        
+        if not page_ids:
+            return [], total
+        
+        stmt = select(Video).where(Video.id.in_(page_ids))
+        videos = list(self.session.execute(stmt).scalars().all())
+        
+        id_to_video = {v.id: v for v in videos}
+        ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
+        
+        return ordered_videos, total
+
     def list_all(
         self,
         page: int = 1,
@@ -309,32 +358,17 @@ class VideoRepository:
         total = self.session.execute(count_stmt).scalar()
         
         if random_order and random_seed is not None:
-            random.seed(random_seed)
             all_ids_stmt = select(Video.id)
             if search:
                 all_ids_stmt = all_ids_stmt.where(search_filter)
-            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
-            random.shuffle(all_ids)
-            
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
-            page_ids = all_ids[start_idx:end_idx]
-            
-            if not page_ids:
-                return [], total
-            
-            stmt = select(Video).where(Video.id.in_(page_ids))
-            videos = list(self.session.execute(stmt).scalars().all())
-            
-            id_to_video = {v.id: v for v in videos}
-            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
-            
-            return ordered_videos, total
-        else:
-            stmt = stmt.order_by(Video.created_at.desc())
-            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-            videos = list(self.session.execute(stmt).scalars().all())
-            return videos, total
+            result = self._apply_random_order(all_ids_stmt, page, page_size, random_seed, total)
+            if result is not None:
+                return result
+        
+        stmt = stmt.order_by(Video.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        videos = list(self.session.execute(stmt).scalars().all())
+        return videos, total
     
     def list_by_tag_ids(
         self,
@@ -389,33 +423,18 @@ class VideoRepository:
         total = self.session.execute(count_stmt).scalar()
         
         if random_order and random_seed is not None:
-            random.seed(random_seed)
             if match_all:
                 all_ids_stmt = select(VideoTag.video_id).where(VideoTag.tag_id.in_(tag_ids)).group_by(VideoTag.video_id).having(func.count(VideoTag.tag_id) == len(tag_ids))
             else:
                 all_ids_stmt = select(VideoTag.video_id).where(VideoTag.tag_id.in_(tag_ids)).distinct()
-            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
-            random.shuffle(all_ids)
-            
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
-            page_ids = all_ids[start_idx:end_idx]
-            
-            if not page_ids:
-                return [], total
-            
-            stmt = select(Video).where(Video.id.in_(page_ids))
-            videos = list(self.session.execute(stmt).scalars().all())
-            
-            id_to_video = {v.id: v for v in videos}
-            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
-            
-            return ordered_videos, total
-        else:
-            stmt = stmt.order_by(Video.created_at.desc())
-            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-            videos = list(self.session.execute(stmt).scalars().all())
-            return videos, total
+            result = self._apply_random_order(all_ids_stmt, page, page_size, random_seed, total)
+            if result is not None:
+                return result
+        
+        stmt = stmt.order_by(Video.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        videos = list(self.session.execute(stmt).scalars().all())
+        return videos, total
     
     def list_by_tags_advanced(
         self,
@@ -475,30 +494,15 @@ class VideoRepository:
         total = self.session.execute(count_stmt).scalar()
         
         if random_order and random_seed is not None:
-            random.seed(random_seed)
             all_ids_stmt = select(Video.id).where(and_(*conditions)).distinct()
-            all_ids = [row[0] for row in self.session.execute(all_ids_stmt).all()]
-            random.shuffle(all_ids)
-            
-            start_idx = (page - 1) * page_size
-            end_idx = start_idx + page_size
-            page_ids = all_ids[start_idx:end_idx]
-            
-            if not page_ids:
-                return [], total
-            
-            stmt = select(Video).where(Video.id.in_(page_ids))
-            videos = list(self.session.execute(stmt).scalars().all())
-            
-            id_to_video = {v.id: v for v in videos}
-            ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
-            
-            return ordered_videos, total
-        else:
-            stmt = stmt.order_by(Video.created_at.desc())
-            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-            videos = list(self.session.execute(stmt).scalars().all())
-            return videos, total
+            result = self._apply_random_order(all_ids_stmt, page, page_size, random_seed, total)
+            if result is not None:
+                return result
+        
+        stmt = stmt.order_by(Video.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        videos = list(self.session.execute(stmt).scalars().all())
+        return videos, total
     
     def exists_by_file_path(self, file_path: str) -> bool:
         """

@@ -155,28 +155,27 @@ async function loadVideos() {
  */
 async function loadVideosFromServer(autoPlay = true) {
     try {
-        const randomSeed = Date.now();
-        const response = await fetchWithAuth('/api/videos/by-tags-advanced', {
+        const response = await fetchWithAuth('/api/v1/random-queue/rx/split-videos', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 tags_by_category: filterParams,
-                page: 1,
-                page_size: 10000,
-                random_order: true,
-                random_seed: randomSeed
+                split_count: 4
             })
         });
         
         const result = await response.json();
         
-        if (result.success && result.data.videos.length > 0) {
-            videos = result.data.videos;
+        if (result.success && result.data.total > 0) {
+            playerVideoLists = result.data.video_groups;
+            currentPlayIndices = [0, 0, 0, 0];
+            videos = [];
+            for (let i = 0; i < playerVideoLists.length; i++) {
+                videos = videos.concat(playerVideoLists[i]);
+            }
             videoCount.textContent = `${videos.length} videos`;
-            
-            distributeVideos();
             
             if (loadingScreen.style.display !== 'none') {
                 loadingScreen.style.display = 'none';
@@ -203,32 +202,6 @@ async function loadVideosFromServer(autoPlay = true) {
             <button onclick="goBack()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">Back</button>
         `;
     }
-}
-
-/**
- * 将视频均分给四个播放器
- * 
- * 将视频列表均分为四等份，余数依次分配到前几个播放器。
- * 例如：13个视频分配为 4, 3, 3, 3
- */
-function distributeVideos() {
-    playerVideoLists = [[], [], [], []];
-    currentPlayIndices = [0, 0, 0, 0];
-    
-    const totalVideos = videos.length;
-    const baseCount = Math.floor(totalVideos / 4);
-    const remainder = totalVideos % 4;
-    
-    let videoIndex = 0;
-    for (let i = 0; i < 4; i++) {
-        const count = baseCount + (i < remainder ? 1 : 0);
-        for (let j = 0; j < count && videoIndex < totalVideos; j++) {
-            playerVideoLists[i].push(videos[videoIndex]);
-            videoIndex++;
-        }
-    }
-    
-    console.log('[MultiPlay] 视频分配:', playerVideoLists.map((list, i) => `播放器${i}: ${list.length}个`).join(', '));
 }
 
 /**
@@ -281,9 +254,8 @@ function playNextVideo(playerIndex) {
     }
     
     if (currentPlayIndices[playerIndex] >= videoList.length) {
-        console.log(`[MultiPlay] 播放器${playerIndex}列表播放完毕，重新加载`);
-        loadVideosFromServer();
-        return;
+        console.log(`[MultiPlay] 播放器${playerIndex}列表播放完毕，循环播放`);
+        currentPlayIndices[playerIndex] = 0;
     }
     
     const videoData = videoList[currentPlayIndices[playerIndex]];
