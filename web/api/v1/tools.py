@@ -1,10 +1,13 @@
 """
 工具API模块
 
-提供视频移动和路径更新等工具功能的API接口。
+提供视频移动、路径更新和视频重命名等工具功能的API接口。
 """
 import os
+import re
 import shutil
+import subprocess
+from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, request
 from sqlalchemy import select
@@ -282,4 +285,180 @@ def update_paths():
     return APIResponse.success({
         'updated': updated,
         'notFound': not_found
+    })
+
+
+def _get_video_duration(file_path: str) -> float:
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            file_path
+        ]
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True, startupinfo=startupinfo
+            )
+        else:
+            result = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+        duration_seconds = float(result.stdout.strip())
+        return round(duration_seconds / 60, 1)
+    except Exception:
+        return 0.0
+
+
+def _get_file_creation_date(file_path: str) -> str:
+    try:
+        if os.name == 'nt':
+            timestamp = os.path.getctime(file_path)
+        else:
+            stat_info = os.stat(file_path)
+            try:
+                timestamp = stat_info.st_birthtime
+            except AttributeError:
+                timestamp = stat_info.st_mtime
+        return datetime.fromtimestamp(timestamp).strftime('%Y%m%d')
+    except Exception:
+        return datetime.now().strftime('%Y%m%d')
+
+
+@tools_bp.route('/rename-videos', methods=['POST'])
+@login_required
+@handle_exceptions
+def rename_videos():
+    """
+    批量重命名文件夹中的视频文件
+    
+    将视频文件按照"创建日期-序号-时长分钟"格式重命名，
+    如 20240929-001-1.7分钟.mp4。
+    已符合格式的文件会被跳过。
+    
+    Request Body:
+        folderPath: 视频文件夹路径
+        recursive: 是否递归扫描子文件夹（可选，默认false）
+    
+    Returns:
+        {
+            success: true,
+            data: {
+                renamed: [{oldName, newName, duration}],
+                skipped: [{name, reason}],
+                errors: [{name, error}]
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        folder_path = data.get('folderPath', '')
+        recursive = data.get('recursive', False)
+
+        if not folder_path:
+            return APIResponse.error('请提供文件夹路径', status_code=400)
+
+        folder_path = folder_path.strip()
+        if len(folder_path) >= 2:
+            if (folder_path[0] == '"' and folder_path[-1] == '"') or \
+               (folder_path[0] == "'" and folder_path[-1] == "'"):
+                folder_path = folder_path[1:-1].strip()
+
+        if not os.path.isdir(folder_path):
+            return APIResponse.error(f'文件夹不存在: {folder_path}', status_code=400)
+
+        source_files = []
+        if recursive:
+            for root, dirs, files in os.walk(folder_path):
+                for filename in files:
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext in VIDEO_EXTENSIONS:
+                        source_files.append(os.path.join(root, filename))
+        else:
+            for filename in os.listdir(folder_path):
+                item_path = os.path.join(folder_path, filename)
+                if os.path.isfile(item_path):
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext in VIDEO_EXTENSIONS:
+                        source_files.append(item_path)
+
+        source_files.sort(key=lambda x: os.path.basename(x))
+
+        if not source_files:
+            return APIResponse.error('该文件夹中没有找到视频文件', status_code=400)
+
+        videos_by_date = {}
+        for video_path in source_files:
+            date = _get_file_creation_date(video_path)
+            if date not in videos_by_date:
+                videos_by_date[date] = []
+            videos_by_date[date].append(video_path)
+
+        renamed = []
+        skipped = []
+        errors = []
+
+        rename_pattern = re.compile(r'^\d{8}-\d{3}-\d+\.\d+分钟\..+$')
+
+        db_manager = get_db_manager()
+
+        for date, date_videos in videos_by_date.items():
+            for i, video_path in enumerate(date_videos, 1):
+                file_name = os.path.basename(video_path)
+                try:
+                    if rename_pattern.match(file_name):
+                        skipped.append({'name': file_name, 'reason': '已符合命名格式'})
+                        continue
+
+                    duration = _get_video_duration(video_path)
+                    _, ext = os.path.splitext(video_path)
+                    new_file_name = f"{date}-{i:03d}-{duration}分钟{ext}"
+                    video_dir = os.path.dirname(video_path)
+                    new_file_path = os.path.join(video_dir, new_file_name)
+
+                    counter = 1
+                    while os.path.exists(new_file_path) and new_file_path != video_path:
+                        new_file_name = f"{date}-{i:03d}-{duration}分钟({counter}){ext}"
+                        new_file_path = os.path.join(video_dir, new_file_name)
+                        counter += 1
+
+                    if new_file_path == video_path:
+                        skipped.append({'name': file_name, 'reason': '文件名已存在'})
+                        continue
+
+                    old_title = os.path.splitext(file_name)[0]
+                    new_title = os.path.splitext(new_file_name)[0]
+
+                    os.rename(video_path, new_file_path)
+
+                    with db_manager.get_session() as session:
+                        video = session.execute(
+                            select(Video).where(Video.title == old_title)
+                        ).scalar_one_or_none()
+                        if video:
+                            video.title = new_title
+                            video.file_path = new_file_path
+
+                    renamed.append({
+                        'oldName': file_name,
+                        'newName': new_file_name,
+                        'duration': duration
+                    })
+
+                except Exception as e:
+                    errors.append({'name': file_name, 'error': str(e)})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return APIResponse.error(f'执行失败: {str(e)}', status_code=500)
+
+    return APIResponse.success({
+        'renamed': renamed,
+        'skipped': skipped,
+        'errors': errors
     })

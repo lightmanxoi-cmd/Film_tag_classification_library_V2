@@ -1151,6 +1151,12 @@
                 </svg>
                 标签编辑
             </button>
+            <button class="nav-tool-btn" onclick="showRenameDialog()" title="批量重命名视频文件为日期-序号-时长格式">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                视频重命名
+            </button>
             <a href="/" class="back-btn">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
@@ -1445,6 +1451,40 @@
             </div>
             
             <div class="tag-editor-result" id="tagEditorResult" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="tool-dialog" id="renameDialog">
+        <div class="tool-dialog-content">
+            <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                视频重命名
+            </h3>
+            <p class="description">将文件夹中的视频文件按照"创建日期-序号-时长分钟"格式批量重命名，例如 20240929-001-1.7分钟.mp4。已符合格式的文件会被自动跳过。重命名后会同步更新数据库中对应视频的标题和路径。</p>
+            
+            <div class="form-group">
+                <label>视频文件夹路径</label>
+                <div class="path-input-group">
+                    <input type="text" id="renameFolderPath" placeholder="选择或输入包含视频文件的文件夹路径">
+                    <button class="browse-btn" onclick="browseRenameFolder()">浏览</button>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-top: 8px;">
+                <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="renameRecursive" style="width: 16px; height: 16px;">
+                    <span>递归扫描子文件夹</span>
+                </label>
+            </div>
+            
+            <div class="tool-result" id="renameResult"></div>
+            
+            <div class="tool-dialog-buttons">
+                <button class="btn-cancel" onclick="closeRenameDialog()">取消</button>
+                <button class="btn-execute" id="renameExecuteBtn" onclick="executeRename()">执行重命名</button>
+            </div>
         </div>
     </div>
 
@@ -2255,6 +2295,116 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadSavedPaths();
         });
+
+        window.showRenameDialog = async function() {
+            if (isElectron) {
+                try {
+                    const savedPaths = await window.electronAPI.getSavedPaths();
+                    if (savedPaths && savedPaths.renameFolderPath) {
+                        document.getElementById('renameFolderPath').value = savedPaths.renameFolderPath;
+                    }
+                    if (savedPaths && savedPaths.renameRecursive !== undefined) {
+                        document.getElementById('renameRecursive').checked = savedPaths.renameRecursive;
+                    }
+                } catch (error) {
+                    console.error('加载保存的路径失败:', error);
+                }
+            }
+            document.getElementById('renameDialog').classList.add('show');
+            document.getElementById('renameResult').classList.remove('show');
+        };
+
+        window.closeRenameDialog = function() {
+            document.getElementById('renameDialog').classList.remove('show');
+        };
+
+        window.browseRenameFolder = async function() {
+            if (isElectron) {
+                const folderPath = await window.electronAPI.selectFolder();
+                if (folderPath) {
+                    document.getElementById('renameFolderPath').value = folderPath;
+                }
+            }
+        };
+
+        window.executeRename = async function() {
+            const folderPath = document.getElementById('renameFolderPath').value.trim();
+            const recursive = document.getElementById('renameRecursive').checked;
+            
+            if (!folderPath) {
+                alert('请填写视频文件夹路径');
+                return;
+            }
+            
+            if (!confirm(`确定要重命名 "${folderPath}" 中的视频文件吗？\n此操作不可撤销！`)) {
+                return;
+            }
+            
+            const executeBtn = document.getElementById('renameExecuteBtn');
+            executeBtn.disabled = true;
+            executeBtn.textContent = '执行中...';
+            
+            const resultDiv = document.getElementById('renameResult');
+            resultDiv.innerHTML = '<div class="result-item">正在扫描并重命名视频文件...</div>';
+            resultDiv.classList.add('show');
+            
+            try {
+                const response = await fetchWithAuth('/api/v1/tools/rename-videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folderPath, recursive })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    let html = '';
+                    
+                    if (data.renamed && data.renamed.length > 0) {
+                        data.renamed.forEach(item => {
+                            html += `<div class="result-item success">✓ ${item.oldName} → ${item.newName} (${item.duration}分钟)</div>`;
+                        });
+                    }
+                    
+                    if (data.skipped && data.skipped.length > 0) {
+                        data.skipped.forEach(item => {
+                            html += `<div class="result-item skip">○ ${item.name} (${item.reason})</div>`;
+                        });
+                    }
+                    
+                    if (data.errors && data.errors.length > 0) {
+                        data.errors.forEach(item => {
+                            html += `<div class="result-item error">✗ ${item.name}: ${item.error}</div>`;
+                        });
+                    }
+                    
+                    html += `<div class="result-summary">
+                        已重命名: ${data.renamed?.length || 0} 个 | 
+                        已跳过: ${data.skipped?.length || 0} 个 | 
+                        失败: ${data.errors?.length || 0} 个
+                    </div>`;
+                    
+                    resultDiv.innerHTML = html;
+                    
+                    if (isElectron) {
+                        try {
+                            const savedPaths = await window.electronAPI.getSavedPaths() || {};
+                            savedPaths.renameFolderPath = folderPath;
+                            savedPaths.renameRecursive = recursive;
+                            await window.electronAPI.savePaths(savedPaths);
+                        } catch (e) {}
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="result-item error">执行失败: ${result.error || result.message || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result-item error">请求失败: ${error.message}</div>`;
+            } finally {
+                executeBtn.disabled = false;
+                executeBtn.textContent = '执行重命名';
+            }
+        };
 
         window.showTagEditorDialog = async function() {
             await loadTagTreeForEditor();
