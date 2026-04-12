@@ -5,7 +5,7 @@
 架构说明：
 - web/core/: 核心模块（配置、错误处理、响应格式）
 - web/auth/: 认证模块（登录、密码管理）
-- web/api/v1/: API v1版本（videos, tags, cache, stats）
+- web/api/v1/: API v1版本
 - web/pages/: 页面路由
 - web/app.py: 应用工厂
 
@@ -15,16 +15,11 @@ API版本：
 """
 import os
 from pathlib import Path
-from sqlalchemy import text
-
-from web.app import create_app
-from video_tag_system.core.database import get_db_manager
-from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
 
 
 def load_env_file():
-    """加载 .env 文件到环境变量"""
-    env_file = Path('.env')
+    """加载 .env 文件到环境变量（必须在导入其他模块之前调用）"""
+    env_file = Path(__file__).parent / '.env'
     if env_file.exists():
         with open(env_file, 'r', encoding='utf-8') as f:
             for line in f:
@@ -36,6 +31,15 @@ def load_env_file():
                     if key and key not in os.environ:
                         os.environ[key] = value
         print("已加载 .env 配置文件")
+
+
+load_env_file()
+
+from sqlalchemy import text
+
+from web.app import create_app
+from video_tag_system.core.database import get_db_manager
+from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
 
 
 def update_thumbnails():
@@ -107,8 +111,6 @@ def run_server(app, debug=False):
 
 def main():
     """主入口函数"""
-    load_env_file()
-    
     config_name = os.environ.get('FLASK_ENV', 'development')
     debug_mode = config_name == 'development'
     app = create_app(config_name)
