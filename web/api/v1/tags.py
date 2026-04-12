@@ -203,14 +203,16 @@ def get_videos_by_tag(tag_id):
     videos = []
     for v in result.items:
         video_title = v.title or os.path.basename(v.file_path)
+        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
+        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
         videos.append({
             'id': v.id,
             'title': video_title,
             'file_path': v.file_path,
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
-            'gif': thumbnail_gen.get_gif_url(video_title)
+            'thumbnail': thumbnail,
+            'gif': gif
         })
     
     response_data = {

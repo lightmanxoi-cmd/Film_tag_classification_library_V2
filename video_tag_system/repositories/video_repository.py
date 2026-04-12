@@ -308,8 +308,8 @@ class VideoRepository:
         if not page_ids:
             return [], total
         
-        stmt = select(Video).where(Video.id.in_(page_ids))
-        videos = list(self.session.execute(stmt).scalars().all())
+        stmt = select(Video).options(selectinload(Video.tags).selectinload(VideoTag.tag)).where(Video.id.in_(page_ids))
+        videos = list(self.session.execute(stmt).unique().scalars().all())
         
         id_to_video = {v.id: v for v in videos}
         ordered_videos = [id_to_video[vid] for vid in page_ids if vid in id_to_video]
@@ -342,7 +342,7 @@ class VideoRepository:
         Performance:
             随机排序时需要获取所有ID后内存排序，大数据量时性能较低
         """
-        stmt = select(Video)
+        stmt = select(Video).options(selectinload(Video.tags).selectinload(VideoTag.tag))
         count_stmt = select(func.count(Video.id))
         
         if search:
@@ -367,7 +367,7 @@ class VideoRepository:
         
         stmt = stmt.order_by(Video.created_at.desc())
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        videos = list(self.session.execute(stmt).scalars().all())
+        videos = list(self.session.execute(stmt).unique().scalars().all())
         return videos, total
     
     def list_by_tag_ids(
@@ -409,11 +409,12 @@ class VideoRepository:
                 .group_by(VideoTag.video_id)
                 .having(func.count(VideoTag.tag_id) == len(tag_ids))
             )
-            stmt = select(Video).where(Video.id.in_(subquery))
+            stmt = select(Video).options(selectinload(Video.tags).selectinload(VideoTag.tag)).where(Video.id.in_(subquery))
             count_stmt = select(func.count()).select_from(stmt.subquery())
         else:
             stmt = (
                 select(Video)
+                .options(selectinload(Video.tags).selectinload(VideoTag.tag))
                 .join(VideoTag, Video.id == VideoTag.video_id)
                 .where(VideoTag.tag_id.in_(tag_ids))
                 .distinct()
@@ -433,7 +434,7 @@ class VideoRepository:
         
         stmt = stmt.order_by(Video.created_at.desc())
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        videos = list(self.session.execute(stmt).scalars().all())
+        videos = list(self.session.execute(stmt).unique().scalars().all())
         return videos, total
     
     def list_by_tags_advanced(
@@ -488,7 +489,7 @@ class VideoRepository:
         if not conditions:
             return [], 0
         
-        stmt = select(Video).where(and_(*conditions)).distinct()
+        stmt = select(Video).options(selectinload(Video.tags).selectinload(VideoTag.tag)).where(and_(*conditions)).distinct()
         count_stmt = select(func.count()).select_from(stmt.subquery())
         
         total = self.session.execute(count_stmt).scalar()
@@ -501,8 +502,68 @@ class VideoRepository:
         
         stmt = stmt.order_by(Video.created_at.desc())
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        videos = list(self.session.execute(stmt).scalars().all())
+        videos = list(self.session.execute(stmt).unique().scalars().all())
         return videos, total
+    
+    def update_media_urls(self, video_id: int, thumbnail_url: Optional[str] = None, gif_url: Optional[str] = None) -> bool:
+        """
+        更新视频的缩略图/GIF URL
+        
+        将计算好的URL持久化到数据库，避免每次请求时重新计算。
+        
+        Args:
+            video_id: 视频ID
+            thumbnail_url: 缩略图URL
+            gif_url: GIF预览URL
+        
+        Returns:
+            bool: 更新成功返回True
+        """
+        video = self.get_by_id(video_id)
+        if not video:
+            return False
+        if thumbnail_url is not None:
+            video.thumbnail_url = thumbnail_url
+        if gif_url is not None:
+            video.gif_url = gif_url
+        self.session.flush()
+        return True
+    
+    def batch_update_media_urls(self, updates: List[Tuple[int, str, Optional[str]]]) -> int:
+        """
+        批量更新视频的缩略图/GIF URL
+        
+        用于初始化或刷新所有视频的媒体URL缓存。
+        
+        Args:
+            updates: 更新列表，每个元素为(video_id, thumbnail_url, gif_url)
+        
+        Returns:
+            int: 实际更新的视频数量
+        """
+        count = 0
+        for video_id, thumbnail_url, gif_url in updates:
+            video = self.get_by_id(video_id)
+            if video:
+                video.thumbnail_url = thumbnail_url
+                video.gif_url = gif_url
+                count += 1
+        self.session.flush()
+        return count
+    
+    def get_videos_without_media_urls(self) -> List[Video]:
+        """
+        获取缺少媒体URL的视频列表
+        
+        用于批量回填URL，找出thumbnail_url或gif_url为空的记录。
+        
+        Returns:
+            List[Video]: 缺少媒体URL的视频列表
+        """
+        stmt = select(Video).where(
+            or_(Video.thumbnail_url.is_(None), Video.gif_url.is_(None))
+        )
+        return list(self.session.execute(stmt).scalars().all())
     
     def exists_by_file_path(self, file_path: str) -> bool:
         """

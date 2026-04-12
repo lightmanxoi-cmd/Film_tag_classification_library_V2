@@ -310,6 +310,11 @@ def import_video():
             for tag_id in all_tag_ids:
                 video_tag_svc.add_tag_to_video(video.id, tag_id)
             
+            try:
+                video_svc.refresh_video_media_url(video.id)
+            except Exception:
+                pass
+            
             return APIResponse.success(data={
                 'action': 'created',
                 'video': {

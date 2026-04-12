@@ -122,14 +122,16 @@ def get_videos():
     videos = []
     for v in result.items:
         video_title = v.title or os.path.basename(v.file_path)
+        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
+        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
         videos.append({
             'id': v.id,
             'title': video_title,
             'file_path': v.file_path,
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
-            'gif': thumbnail_gen.get_gif_url(video_title)
+            'thumbnail': thumbnail,
+            'gif': gif
         })
     
     response_data = {
@@ -170,13 +172,22 @@ def get_video_detail(video_id):
     video_svc = ServiceLocator.get_video_service()
     
     video = video_svc.get_video(video_id)
+    
+    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+    thumbnail_gen = get_thumbnail_generator()
+    video_title = video.title or os.path.basename(video.file_path)
+    thumbnail = video.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
+    gif = video.gif_url if video.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
+    
     response_data = {
         'id': video.id,
-        'title': video.title or os.path.basename(video.file_path),
+        'title': video_title,
         'file_path': video.file_path,
         'duration': video.duration,
         'description': video.description,
-        'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags]
+        'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags],
+        'thumbnail': thumbnail,
+        'gif': gif
     }
     
     cache.set(cache_key, response_data, ttl=120)
@@ -248,14 +259,16 @@ def get_videos_by_multiple_tags():
     videos = []
     for v in result.items:
         video_title = v.title or os.path.basename(v.file_path)
+        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
+        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
         videos.append({
             'id': v.id,
             'title': video_title,
             'file_path': v.file_path,
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
-            'gif': thumbnail_gen.get_gif_url(video_title)
+            'thumbnail': thumbnail,
+            'gif': gif
         })
     
     response_data = {
@@ -345,14 +358,16 @@ def get_videos_by_tags_advanced():
     videos = []
     for v in result.items:
         video_title = v.title or os.path.basename(v.file_path)
+        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
+        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
         videos.append({
             'id': v.id,
             'title': video_title,
             'file_path': v.file_path,
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail_gen.get_thumbnail_url(video_title),
-            'gif': thumbnail_gen.get_gif_url(video_title)
+            'thumbnail': thumbnail,
+            'gif': gif
         })
     
     response_data = {
@@ -751,14 +766,18 @@ def generate_gif_for_video(video_id):
     thumbnail_gen = get_thumbnail_generator()
     
     if thumbnail_gen.has_gif(video_title):
+        gif_url = thumbnail_gen.get_gif_url(video_title)
+        if video.gif_url != gif_url:
+            video_svc.refresh_video_media_url(video_id)
         return APIResponse.success(
             message='GIF已存在',
-            data={'gif_url': thumbnail_gen.get_gif_url(video_title)}
+            data={'gif_url': gif_url}
         )
     
     result = thumbnail_gen.generate_gif(video.file_path, video_title, video.duration)
     
     if result:
+        video_svc.refresh_video_media_url(video_id)
         return APIResponse.success(
             message='GIF生成成功',
             data={'gif_url': thumbnail_gen.get_gif_url(video_title)}
@@ -967,6 +986,40 @@ def get_missing_thumbnails():
         'page': page,
         'page_size': page_size
     })
+
+
+@videos_bp.route('/backfill-media-urls', methods=['POST'])
+@login_required
+@handle_exceptions
+def backfill_media_urls():
+    """
+    回填视频媒体URL到数据库
+    
+    扫描所有缺少thumbnail_url或gif_url的视频记录，
+    根据实际文件情况计算URL并持久化到数据库。
+    用于一次性迁移，将现有视频的URL从实时计算转为数据库存储。
+    
+    Returns:
+        JSON响应，包含回填结果统计
+    
+    Example:
+        POST /api/v1/videos/backfill-media-urls
+        {
+            "success": true,
+            "data": {
+                "total": 100,
+                "updated": 98,
+                "failed": 2
+            }
+        }
+    """
+    video_svc = ServiceLocator.get_video_service()
+    result = video_svc.backfill_media_urls()
+    
+    return APIResponse.success(
+        message=f'回填完成：共{result["total"]}个视频，成功{result["updated"]}个，失败{result["failed"]}个',
+        data=result
+    )
 
 
 @videos_bp.route('/streams/active', methods=['GET'])

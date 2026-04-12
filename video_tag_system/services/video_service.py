@@ -36,6 +36,7 @@ Note:
     这允许在单个事务中执行多个操作，支持回滚。
 """
 import math
+import os
 from typing import Optional, List
 
 from sqlalchemy.orm import Session
@@ -463,7 +464,76 @@ class VideoService:
             duration=video.duration,
             file_size=video.file_size,
             file_hash=video.file_hash,
+            gif_path=video.gif_path,
+            thumbnail_url=video.thumbnail_url,
+            gif_url=video.gif_url,
             created_at=video.created_at,
             updated_at=video.updated_at,
             tags=tags
+        )
+    
+    def backfill_media_urls(self) -> dict:
+        """
+        回填所有视频的缩略图/GIF URL
+        
+        扫描数据库中缺少媒体URL的视频记录，根据标题计算URL并持久化。
+        此方法用于一次性迁移，将现有视频的URL从实时计算转为数据库存储。
+        
+        Returns:
+            dict: 回填结果统计
+                - total: 需要回填的视频数
+                - updated: 成功更新的数量
+                - failed: 失败数量
+        """
+        from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+        
+        thumbnail_gen = get_thumbnail_generator()
+        videos = self.video_repo.get_videos_without_media_urls()
+        
+        result = {'total': len(videos), 'updated': 0, 'failed': 0}
+        
+        for video in videos:
+            try:
+                video_title = video.title or os.path.basename(video.file_path)
+                thumbnail_url = thumbnail_gen.compute_thumbnail_url(video_title)
+                gif_url = thumbnail_gen.compute_gif_url(video_title)
+                
+                self.video_repo.update_media_urls(
+                    video_id=video.id,
+                    thumbnail_url=thumbnail_url,
+                    gif_url=gif_url
+                )
+                result['updated'] += 1
+            except Exception as e:
+                result['failed'] += 1
+        
+        return result
+    
+    def refresh_video_media_url(self, video_id: int) -> bool:
+        """
+        刷新单个视频的媒体URL
+        
+        当缩略图或GIF文件发生变化时，重新计算并更新数据库中的URL。
+        
+        Args:
+            video_id: 视频ID
+        
+        Returns:
+            bool: 更新成功返回True
+        """
+        from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
+        
+        video = self.video_repo.get_by_id(video_id)
+        if not video:
+            raise VideoNotFoundError(video_id=video_id)
+        
+        thumbnail_gen = get_thumbnail_generator()
+        video_title = video.title or os.path.basename(video.file_path)
+        thumbnail_url = thumbnail_gen.compute_thumbnail_url(video_title)
+        gif_url = thumbnail_gen.compute_gif_url(video_title)
+        
+        return self.video_repo.update_media_urls(
+            video_id=video_id,
+            thumbnail_url=thumbnail_url,
+            gif_url=gif_url
         )

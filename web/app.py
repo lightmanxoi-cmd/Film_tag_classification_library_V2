@@ -391,6 +391,31 @@ def _init_database(app: Flask):
         logger.info("随机队列管理器初始化完成")
     except Exception as e:
         logger.warning(f"随机队列管理器初始化失败: {e}")
+    
+    try:
+        _backfill_media_urls(db)
+        logger.info("媒体URL回填检查完成")
+    except Exception as e:
+        logger.warning(f"媒体URL回填失败: {e}")
+
+
+def _backfill_media_urls(db):
+    """
+    启动时回填视频媒体URL
+    
+    检查数据库中是否存在缺少thumbnail_url或gif_url的视频记录，
+    如果存在则批量计算并持久化URL，避免后续请求时的实时计算开销。
+    
+    Args:
+        db: 数据库管理器实例
+    """
+    from video_tag_system.services.video_service import VideoService
+    
+    with db.get_session() as session:
+        svc = VideoService(session)
+        result = svc.backfill_media_urls()
+        if result['total'] > 0:
+            logger.info(f"媒体URL回填：共{result['total']}个视频，成功{result['updated']}个，失败{result['failed']}个")
 
 
 def _register_cleanup(app: Flask):

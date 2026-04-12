@@ -80,6 +80,8 @@ class Video(Base):
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     gif_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    gif_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=func.now(),
@@ -220,6 +222,8 @@ class VideoResponse(BaseModel):
     file_size: Optional[int] = None
     file_hash: Optional[str] = None
     gif_path: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    gif_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     tags: List[TagResponse] = []

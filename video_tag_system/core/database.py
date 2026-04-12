@@ -258,8 +258,42 @@ class DatabaseManager:
         """
         try:
             Base.metadata.create_all(self.engine)
+            self._migrate_schema()
         except Exception as e:
             raise DatabaseError("创建数据表失败", e)
+    
+    def _migrate_schema(self) -> None:
+        """
+        执行数据库模式迁移
+        
+        检查并添加新列到现有表中，确保数据库结构与模型定义一致。
+        使用 SQLite 的 ALTER TABLE ADD COLUMN 实现增量迁移。
+        
+        迁移列表：
+        - videos.thumbnail_url: 缩略图URL持久化字段
+        - videos.gif_url: GIF预览URL持久化字段
+        """
+        if not self.database_url.startswith("sqlite"):
+            return
+        
+        migrations = [
+            ("videos", "thumbnail_url", "VARCHAR(500)"),
+            ("videos", "gif_url", "VARCHAR(500)"),
+        ]
+        
+        try:
+            inspector = inspect(self.engine)
+            for table_name, column_name, column_type in migrations:
+                if table_name not in inspector.get_table_names():
+                    continue
+                existing_columns = [col["name"] for col in inspector.get_columns(table_name)]
+                if column_name not in existing_columns:
+                    with self.get_session() as session:
+                        session.execute(text(
+                            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                        ))
+        except Exception as e:
+            pass
     
     def drop_tables(self) -> None:
         """

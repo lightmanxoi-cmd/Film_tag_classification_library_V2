@@ -1018,6 +1018,37 @@ class ThumbnailGenerator:
         return task_id
 
 
+    def compute_thumbnail_url(self, title: str) -> str:
+        """
+        计算缩略图URL（用于数据库持久化）
+        
+        根据标题计算缩略图URL，如果缩略图文件存在则返回实际URL，
+        否则返回占位图URL。此方法用于将URL存入数据库，避免每次请求时重新计算。
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            str: 缩略图URL
+        """
+        return self.get_thumbnail_url(title)
+    
+    def compute_gif_url(self, title: str) -> Optional[str]:
+        """
+        计算GIF URL（用于数据库持久化）
+        
+        根据标题计算GIF URL，如果GIF文件存在则返回实际URL，
+        否则返回None。此方法用于将URL存入数据库，避免每次请求时重新计算。
+        
+        Args:
+            title: 视频标题
+        
+        Returns:
+            Optional[str]: GIF URL，不存在返回None
+        """
+        return self.get_gif_url(title)
+
+
 thumbnail_generator = ThumbnailGenerator()
 
 
