@@ -27,7 +27,7 @@
 import secrets
 from flask import Blueprint, render_template, request, redirect, url_for, session
 
-from web.auth.service import AuthService, init_default_password
+from web.auth.service import AuthService, init_default_password, get_session_secret
 from web.auth.decorators import login_required
 from web.core.responses import APIResponse
 
@@ -145,6 +145,7 @@ def init_auth(app):
     初始化认证模块
     
     设置应用密钥和会话配置，初始化默认密码。
+    会话密钥从环境变量 SESSION_SECRET/SECRET_KEY 读取。
     
     Args:
         app: Flask应用实例
@@ -153,8 +154,12 @@ def init_auth(app):
         dict: 认证配置字典
     
     Side Effects:
-        - 设置app.secret_key
+        - 设置app.secret_key（从环境变量读取）
         - 首次运行时创建默认密码
+    
+    Environment Variables:
+        SESSION_SECRET: 会话密钥（推荐，优先级最高）
+        SECRET_KEY: 应用密钥（兼容）
     
     Example:
         from web.auth import init_auth
@@ -162,8 +167,7 @@ def init_auth(app):
     """
     config, is_new = init_default_password(app.root_path)
     
-    if config.get('session_secret'):
-        app.secret_key = config['session_secret']
+    app.secret_key = get_session_secret()
     
     if is_new:
         print("=" * 50)

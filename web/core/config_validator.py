@@ -73,6 +73,8 @@ def validate_auth_config(auth_config_path: str = None) -> Tuple[bool, str]:
     """
     验证认证配置
     
+    检查认证配置文件（仅存储密码哈希）和会话密钥环境变量。
+    
     Args:
         auth_config_path: 认证配置文件路径
     
@@ -94,9 +96,6 @@ def validate_auth_config(auth_config_path: str = None) -> Tuple[bool, str]:
         
         if not config.get('password_hash'):
             return True, "密码未设置，首次登录将使用环境变量或需要设置密码"
-        
-        if not config.get('session_secret'):
-            return True, "会话密钥未设置，将自动生成"
         
         return True, ""
     except json.JSONDecodeError:
@@ -208,6 +207,12 @@ def check_environment() -> Tuple[bool, List[str], List[str]]:
     if not secret_key:
         warnings.append("SECRET_KEY 环境变量未设置，将自动生成（生产环境建议手动设置）")
     
+    session_secret = os.environ.get('SESSION_SECRET')
+    if not session_secret and not secret_key:
+        warnings.append("SESSION_SECRET 和 SECRET_KEY 环境变量均未设置，会话密钥将自动生成（生产环境必须设置）")
+    elif not session_secret and secret_key:
+        warnings.append("SESSION_SECRET 环境变量未设置，将使用 SECRET_KEY 作为会话密钥（建议单独设置 SESSION_SECRET）")
+    
     default_password = os.environ.get('DEFAULT_PASSWORD')
     if default_password:
         warnings.append("DEFAULT_PASSWORD 环境变量已设置，请确保在生产环境中修改默认密码")
@@ -230,6 +235,7 @@ def print_config_status():
     console.info(f"  VIDEO_BASE_PATH: {video_path}")
     console.info(f"  DATABASE_URL: {database_url}")
     console.info(f"  SECRET_KEY: {'(已设置)' if os.environ.get('SECRET_KEY') else '(自动生成)'}")
+    console.info(f"  SESSION_SECRET: {'(已设置)' if os.environ.get('SESSION_SECRET') else '(未设置，使用SECRET_KEY或自动生成)'}")
     console.info(f"  DEFAULT_PASSWORD: {'(已设置)' if os.environ.get('DEFAULT_PASSWORD') else '(未设置)'}")
     
     console.separator('-')
@@ -282,7 +288,8 @@ def require_config(config: dict):
         console.info("\n请检查以下配置:")
         console.info("  1. 设置 VIDEO_BASE_PATH 环境变量或创建 .env 文件")
         console.info("  2. 确保 SECRET_KEY 已设置")
-        console.info("  3. 检查数据库配置")
+        console.info("  3. 确保 SESSION_SECRET 已设置（或使用 SECRET_KEY 作为会话密钥）")
+        console.info("  4. 检查数据库配置")
         console.separator()
         logger.error("配置验证失败", extra={'extra_data': {'errors': result.errors}})
         raise ConfigurationError(result.errors)

@@ -26,7 +26,11 @@ PBKDF2参数：
     - hash: SHA256
 
 配置文件：
-    .auth_config.json - 存储密码哈希和会话密钥
+    .auth_config.json - 仅存储密码哈希
+
+会话密钥：
+    从环境变量 SESSION_SECRET 或 SECRET_KEY 读取，不再存储到配置文件中。
+    如果两者均未设置，则自动生成临时密钥（仅适用于开发环境）。
 
 使用示例：
     from web.auth.service import AuthService
@@ -44,6 +48,7 @@ PBKDF2参数：
     - 安装argon2-cffi以获得更好的安全性
     - 定期更换密码
     - 使用强密码（至少8位，包含大小写字母和数字）
+    - 生产环境必须设置 SESSION_SECRET 或 SECRET_KEY 环境变量
 """
 import os
 import json
@@ -225,12 +230,49 @@ def verify_password(password: str, password_hash: str) -> bool:
             return False
 
 
+def get_session_secret() -> str:
+    """
+    获取会话密钥
+    
+    从环境变量读取会话密钥，优先级：
+    1. SESSION_SECRET 环境变量（推荐）
+    2. SECRET_KEY 环境变量（兼容）
+    3. 自动生成临时密钥（仅开发环境）
+    
+    Returns:
+        str: 会话密钥
+    
+    Example:
+        secret = get_session_secret()
+        app.secret_key = secret
+    
+    Security:
+        - 生产环境必须设置 SESSION_SECRET 或 SECRET_KEY 环境变量
+        - 自动生成的密钥在服务重启后会变化，导致会话失效
+    """
+    session_secret = os.environ.get('SESSION_SECRET')
+    if session_secret:
+        return session_secret
+    
+    secret_key = os.environ.get('SECRET_KEY')
+    if secret_key:
+        return secret_key
+    
+    logger.warning(
+        "SESSION_SECRET 和 SECRET_KEY 环境变量均未设置，已自动生成临时密钥。"
+        "生产环境请务必设置 SESSION_SECRET 环境变量！"
+    )
+    return secrets.token_hex(32)
+
+
 def init_default_password(base_dir: str = None, default_password: str = None) -> Tuple[dict, bool]:
     """
     初始化默认密码
     
     如果配置文件中不存在密码哈希，则创建默认密码。
     默认密码优先从环境变量 DEFAULT_PASSWORD 读取，如果未设置则提示用户设置。
+    
+    注意：会话密钥不再存储到配置文件中，而是从环境变量 SESSION_SECRET/SECRET_KEY 读取。
     
     Args:
         base_dir: 基础目录
@@ -240,11 +282,12 @@ def init_default_password(base_dir: str = None, default_password: str = None) ->
         Tuple[dict, bool]: (配置字典, 是否是新创建的)
     
     Side Effects:
-        - 创建或更新.auth_config.json文件
-        - 生成会话密钥
+        - 创建或更新.auth_config.json文件（仅存储密码哈希）
     
     Environment Variables:
         DEFAULT_PASSWORD: 默认密码（推荐设置）
+        SESSION_SECRET: 会话密钥（推荐设置）
+        SECRET_KEY: 应用密钥（兼容，SESSION_SECRET 优先）
     
     Example:
         config, is_new = init_default_password()
@@ -254,9 +297,23 @@ def init_default_password(base_dir: str = None, default_password: str = None) ->
     Security:
         - 生产环境强烈建议设置 DEFAULT_PASSWORD 环境变量
         - 首次运行后请立即修改密码
+        - 生产环境必须设置 SESSION_SECRET 或 SECRET_KEY 环境变量
     """
     config = load_auth_config(base_dir)
     is_new = False
+    
+    if 'session_secret' in config:
+        session_secret_value = config.pop('session_secret')
+        save_auth_config(config, base_dir)
+        logger.info("已从配置文件中移除session_secret字段，会话密钥已迁移至环境变量SESSION_SECRET")
+        if session_secret_value:
+            console.separator()
+            console.warning("安全迁移提示: 检测到配置文件中存在会话密钥(session_secret)")
+            console.info("会话密钥已从配置文件中移除，请将其迁移至环境变量:")
+            console.info("  1. 在 .env 文件中添加: SESSION_SECRET=<your-session-secret>")
+            console.info("  2. 或设置系统环境变量: set SESSION_SECRET=<your-session-secret>")
+            console.info("  注意: 如果不设置SESSION_SECRET，系统将自动生成临时密钥（重启后失效）")
+            console.separator()
     
     if not config.get('password_hash'):
         if default_password is None:
@@ -265,7 +322,6 @@ def init_default_password(base_dir: str = None, default_password: str = None) ->
         if default_password:
             password_hash = hash_password(default_password)
             config['password_hash'] = password_hash
-            config['session_secret'] = secrets.token_hex(32)
             save_auth_config(config, base_dir)
             is_new = True
             console.separator()
@@ -283,11 +339,18 @@ def init_default_password(base_dir: str = None, default_password: str = None) ->
             console.info("  2. 创建 .env 文件并添加: DEFAULT_PASSWORD=your_password")
             console.info("  3. 首次访问时系统会引导您设置密码")
             console.separator()
-            config['session_secret'] = secrets.token_hex(32)
             config['password_pending'] = True
             save_auth_config(config, base_dir)
             is_new = True
             logger.warning("未设置初始密码，需要手动配置")
+    
+    has_session_secret = os.environ.get('SESSION_SECRET') or os.environ.get('SECRET_KEY')
+    if not has_session_secret:
+        console.separator()
+        console.warning("安全提示: SESSION_SECRET 环境变量未设置")
+        console.info("生产环境请设置 SESSION_SECRET 环境变量以确保会话安全")
+        console.info("生成方法: python -c \"import secrets; print(secrets.token_hex(32))\"")
+        console.separator()
     
     return config, is_new
 
@@ -432,16 +495,24 @@ class AuthService:
             self.reload_config()
         return result
     
-    def get_session_secret(self) -> Optional[str]:
+    def get_session_secret(self) -> str:
         """
         获取会话密钥
         
+        从环境变量读取会话密钥，优先级：
+        1. SESSION_SECRET 环境变量（推荐）
+        2. SECRET_KEY 环境变量（兼容）
+        3. 自动生成临时密钥（仅开发环境）
+        
         Returns:
-            Optional[str]: 会话密钥，不存在则返回None
+            str: 会话密钥
         
         Example:
             secret = auth.get_session_secret()
-            if secret:
-                app.secret_key = secret
+            app.secret_key = secret
+        
+        Security:
+            - 生产环境必须设置 SESSION_SECRET 或 SECRET_KEY 环境变量
+            - 自动生成的密钥在服务重启后会变化，导致会话失效
         """
-        return self.config.get('session_secret')
+        return get_session_secret()

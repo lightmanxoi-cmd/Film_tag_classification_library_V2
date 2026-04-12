@@ -35,7 +35,7 @@
 """
 from web.auth.routes import auth_bp, init_auth
 from web.auth.decorators import login_required, api_login_required, optional_auth
-from web.auth.service import AuthService
+from web.auth.service import AuthService, get_session_secret
 
 __all__ = [
     'auth_bp',
@@ -43,5 +43,6 @@ __all__ = [
     'login_required',
     'api_login_required',
     'optional_auth',
-    'AuthService'
+    'AuthService',
+    'get_session_secret'
 ]

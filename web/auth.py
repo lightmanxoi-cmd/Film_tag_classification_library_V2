@@ -36,12 +36,16 @@ Argon2参数：
         return "已登录用户可见"
 
 配置文件：
-    .auth_config.json - 存储密码哈希和会话密钥
+    .auth_config.json - 仅存储密码哈希
+
+会话密钥：
+    从环境变量 SESSION_SECRET 或 SECRET_KEY 读取，不再存储到配置文件中。
+    如果两者均未设置，则自动生成临时密钥（仅适用于开发环境）。
 
 安全特性：
     - Argon2id密码哈希（抗GPU/ASIC攻击）
     - 随机盐值
-    - 会话密钥自动生成
+    - 会话密钥从环境变量读取
     - 安全Cookie设置
 
 初始密码设置：
@@ -89,7 +93,7 @@ class AuthConfig:
     认证配置管理类
     
     管理认证配置文件的读取和写入。
-    配置文件存储密码哈希、会话密钥等信息。
+    配置文件仅存储密码哈希，会话密钥从环境变量读取。
     
     Attributes:
         config_path: 配置文件路径
@@ -97,11 +101,14 @@ class AuthConfig:
     Config Structure:
         {
             "password_hash": "哈希后的密码",
-            "session_secret": "会话密钥",
             "max_attempts": 5,
             "lockout_duration": 300,
             "created_at": "创建时间"
         }
+    
+    Environment Variables:
+        SESSION_SECRET: 会话密钥（推荐）
+        SECRET_KEY: 应用密钥（兼容，SESSION_SECRET 优先）
     """
     
     def __init__(self, config_dir: str = None):
@@ -117,16 +124,21 @@ class AuthConfig:
         self._ensure_config_exists()
     
     def _ensure_config_exists(self):
-        """确保配置文件存在，不存在则创建默认配置"""
+        """确保配置文件存在，不存在则创建默认配置。如果存在旧格式的session_secret字段则自动移除。"""
         if not os.path.exists(self.config_path):
             default_config = {
                 'password_hash': '',
-                'session_secret': secrets.token_hex(32),
                 'max_attempts': 5,
                 'lockout_duration': 300,
                 'created_at': None
             }
             self._save_config(default_config)
+        else:
+            config = self._load_config()
+            if 'session_secret' in config:
+                config.pop('session_secret')
+                self._save_config(config)
+                logger.info("已从配置文件中移除session_secret字段，会话密钥已迁移至环境变量SESSION_SECRET")
     
     def _load_config(self) -> dict:
         """
@@ -141,7 +153,6 @@ class AuthConfig:
         except Exception:
             return {
                 'password_hash': '',
-                'session_secret': secrets.token_hex(32),
                 'max_attempts': 5,
                 'lockout_duration': 300,
                 'created_at': None
@@ -161,11 +172,27 @@ class AuthConfig:
         """
         获取会话密钥
         
+        从环境变量读取会话密钥，优先级：
+        1. SESSION_SECRET 环境变量（推荐）
+        2. SECRET_KEY 环境变量（兼容）
+        3. 自动生成临时密钥（仅开发环境）
+        
         Returns:
             str: 会话密钥
         """
-        config = self._load_config()
-        return config.get('session_secret', secrets.token_hex(32))
+        session_secret = os.environ.get('SESSION_SECRET')
+        if session_secret:
+            return session_secret
+        
+        secret_key = os.environ.get('SECRET_KEY')
+        if secret_key:
+            return secret_key
+        
+        logger.warning(
+            "SESSION_SECRET 和 SECRET_KEY 环境变量均未设置，已自动生成临时密钥。"
+            "生产环境请务必设置 SESSION_SECRET 环境变量！"
+        )
+        return secrets.token_hex(32)
     
     def set_password_hash(self, password_hash: str):
         """
