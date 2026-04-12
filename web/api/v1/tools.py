@@ -39,6 +39,7 @@ def move_videos():
     Request Body:
         sourcePath: 视频源文件夹路径
         targetPath: 目标分类文件夹路径
+        recursive: 是否递归扫描子文件夹（可选，默认true）
     
     Returns:
         {
@@ -55,7 +56,8 @@ def move_videos():
         print(f"[Tools] move_videos called with data: {data}")
         source_path = data.get('sourcePath', '')
         target_path = data.get('targetPath', '')
-        print(f"[Tools] source_path: {source_path}, target_path: {target_path}")
+        recursive = data.get('recursive', True)
+        print(f"[Tools] source_path: {source_path}, target_path: {target_path}, recursive: {recursive}")
         
         if not source_path or not target_path:
             return APIResponse.error('请提供源文件夹和目标文件夹路径', status_code=400)
@@ -111,15 +113,20 @@ def move_videos():
             
             tag_map = {tid: name for tid, name in tags}
         
-        source_files = os.listdir(source_path)
-        print(f"[Tools] Found {len(source_files)} files in source folder")
+        source_files = []
+        if recursive:
+            for root, dirs, files in os.walk(source_path):
+                for filename in files:
+                    source_files.append((filename, os.path.join(root, filename)))
+            print(f"[Tools] Found {len(source_files)} files in source folder (recursive)")
+        else:
+            for filename in os.listdir(source_path):
+                item_path = os.path.join(source_path, filename)
+                if os.path.isfile(item_path):
+                    source_files.append((filename, item_path))
+            print(f"[Tools] Found {len(source_files)} files in source folder (non-recursive)")
         
-        for item in source_files:
-            item_path = os.path.join(source_path, item)
-            
-            if not os.path.isfile(item_path):
-                continue
-            
+        for item, item_path in source_files:
             ext = os.path.splitext(item)[1].lower()
             if ext not in VIDEO_EXTENSIONS:
                 continue

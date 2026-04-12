@@ -1292,7 +1292,7 @@
                 </svg>
                 视频移动
             </h3>
-            <p class="description">根据视频在库中的标签，将视频文件移动到对应的分类文件夹中。系统会检索视频的所有标签，如果标签名与目标文件夹中的子文件夹同名，则移动到该文件夹。</p>
+            <p class="description">根据视频在库中的标签，将视频文件移动到对应的分类文件夹中。系统会检索视频的所有标签，如果标签名与目标文件夹中的子文件夹同名，则移动到该文件夹。支持递归扫描源文件夹中的所有子文件夹。</p>
             
             <div class="form-group">
                 <label>视频源文件夹路径</label>
@@ -1308,6 +1308,13 @@
                     <input type="text" id="moveTargetPath" placeholder="选择或输入包含分类子文件夹的目标路径">
                     <button class="browse-btn" onclick="browseMoveTarget()">浏览</button>
                 </div>
+            </div>
+            
+            <div class="form-group" style="margin-top: 8px;">
+                <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="moveRecursive" checked style="width: 16px; height: 16px;">
+                    <span>递归扫描子文件夹</span>
+                </label>
             </div>
             
             <div class="tool-result" id="moveResult"></div>
@@ -2039,6 +2046,9 @@
                     if (savedPaths.updateSearchPath) {
                         document.getElementById('updateSearchPath').value = savedPaths.updateSearchPath;
                     }
+                    if (savedPaths.moveRecursive !== undefined) {
+                        document.getElementById('moveRecursive').checked = savedPaths.moveRecursive;
+                    }
                 }
             } catch (error) {
                 console.error('加载保存的路径失败:', error);
@@ -2051,7 +2061,8 @@
             const paths = {
                 moveSourcePath: document.getElementById('moveSourcePath').value,
                 moveTargetPath: document.getElementById('moveTargetPath').value,
-                updateSearchPath: document.getElementById('updateSearchPath').value
+                updateSearchPath: document.getElementById('updateSearchPath').value,
+                moveRecursive: document.getElementById('moveRecursive').checked
             };
             
             try {
@@ -2114,6 +2125,7 @@
         window.executeMove = async function() {
             const sourcePath = document.getElementById('moveSourcePath').value.trim();
             const targetPath = document.getElementById('moveTargetPath').value.trim();
+            const recursive = document.getElementById('moveRecursive').checked;
             
             if (!sourcePath || !targetPath) {
                 alert('请填写源文件夹和目标文件夹路径');
@@ -2132,7 +2144,7 @@
                 const response = await fetchWithAuth('/api/v1/tools/move-videos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sourcePath, targetPath })
+                    body: JSON.stringify({ sourcePath, targetPath, recursive })
                 });
                 
                 const result = await response.json();
