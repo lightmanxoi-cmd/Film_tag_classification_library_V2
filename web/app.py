@@ -49,7 +49,7 @@ from video_tag_system.utils.random_queue_manager import init_random_queue_manage
 logger = get_logger(__name__)
 
 from web.core.config import config
-from web.core.extensions import cors
+from web.core.extensions import cors, init_cors
 from web.core.errors import register_error_handlers
 from web.auth import auth_bp, init_auth
 from web.pages import pages_bp
@@ -150,7 +150,7 @@ def _init_extensions(app: Flask):
     Args:
         app: Flask应用实例
     """
-    cors.init_app(app)
+    init_cors(app)
 
 
 def _init_auth(app: Flask):
