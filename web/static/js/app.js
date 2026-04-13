@@ -170,6 +170,7 @@ function initVideoModalClickOutside() {
     });
 
     modalContent.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action]')) return;
         e.stopPropagation();
     });
 }
