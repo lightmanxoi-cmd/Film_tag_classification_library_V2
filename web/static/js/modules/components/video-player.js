@@ -20,13 +20,10 @@ export class VideoPlayer {
         this.container = document.getElementById(containerId);
         this.videoElementId = videoElementId;
         this.player = null;
-        this.currentVideoPath = '';
     }
 
-    async play(videoId, title, tags, filePath) {
+    async play(videoId, title, tags) {
         try {
-            this.currentVideoPath = filePath;
-            
             const response = await fetchWithAuth(`/api/video/stream/${videoId}`);
             const result = await response.json();
             

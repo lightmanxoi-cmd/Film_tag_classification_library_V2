@@ -161,6 +161,11 @@ class Config:
     VIDEO_STREAM_LOG_ENABLED = os.environ.get('VIDEO_STREAM_LOG_ENABLED', 'true').lower() == 'true'
     VIDEO_STREAM_MAX_BANDWIDTH = int(os.environ.get('VIDEO_STREAM_MAX_BANDWIDTH', 0))
     
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With']
+    CORS_MAX_AGE = int(os.environ.get('CORS_MAX_AGE', '600'))
+    
     @classmethod
     def init_app(cls, app):
         """
@@ -224,6 +229,10 @@ class ProductionConfig(Config):
     
     DEBUG = False
     SESSION_COOKIE_SECURE = True
+    
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '')
+    CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE']
+    CORS_ALLOW_HEADERS = ['Content-Type', 'Authorization']
     
     @classmethod
     def init_app(cls, app):

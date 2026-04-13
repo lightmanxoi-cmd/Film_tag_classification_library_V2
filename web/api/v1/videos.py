@@ -127,7 +127,7 @@ def get_videos():
         videos.append({
             'id': v.id,
             'title': video_title,
-            'file_path': v.file_path,
+            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
             'thumbnail': thumbnail,
@@ -182,7 +182,7 @@ def get_video_detail(video_id):
     response_data = {
         'id': video.id,
         'title': video_title,
-        'file_path': video.file_path,
+        'file_ext': os.path.splitext(video.file_path)[1].lower() if video.file_path else '',
         'duration': video.duration,
         'description': video.description,
         'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags],
@@ -264,7 +264,7 @@ def get_videos_by_multiple_tags():
         videos.append({
             'id': v.id,
             'title': video_title,
-            'file_path': v.file_path,
+            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
             'thumbnail': thumbnail,
@@ -363,7 +363,7 @@ def get_videos_by_tags_advanced():
         videos.append({
             'id': v.id,
             'title': video_title,
-            'file_path': v.file_path,
+            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
             'thumbnail': thumbnail,
@@ -733,6 +733,41 @@ def get_video_stream_url(video_id):
     })
 
 
+@videos_bp.route('/<int:video_id>/file-path', methods=['GET'])
+@login_required
+@handle_exceptions
+def get_video_file_path(video_id):
+    """
+    获取视频文件路径（专用接口）
+    
+    仅在需要文件路径的管理操作中使用。
+    通用API响应中不返回完整文件路径，以避免泄露服务器文件系统信息。
+    
+    Args:
+        video_id: 视频ID
+    
+    Returns:
+        JSON响应，包含视频文件路径
+    
+    Example:
+        GET /api/v1/videos/1/file-path
+        {
+            "success": true,
+            "data": {
+                "id": 1,
+                "file_path": "/path/to/video.mp4"
+            }
+        }
+    """
+    video_svc = ServiceLocator.get_video_service()
+    video = video_svc.get_video(video_id)
+    
+    return APIResponse.success(data={
+        'id': video.id,
+        'file_path': video.file_path
+    })
+
+
 @videos_bp.route('/<int:video_id>/gif', methods=['POST'])
 @login_required
 @handle_exceptions
@@ -976,7 +1011,7 @@ def get_missing_thumbnails():
             missing_videos.append({
                 'id': v.id,
                 'title': video_title,
-                'file_path': v.file_path,
+                'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
                 'duration': v.duration
             })
     
@@ -1103,7 +1138,7 @@ def get_missing_gifs():
             missing_videos.append({
                 'id': v.id,
                 'title': video_title,
-                'file_path': v.file_path,
+                'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
                 'duration': v.duration
             })
     

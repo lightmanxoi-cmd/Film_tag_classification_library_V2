@@ -84,14 +84,6 @@ function setVideoPlayer(player) {
     videoPlayer = player;
 }
 
-function getCurrentVideoPath() {
-    return appState.get('currentVideoPath');
-}
-
-function setCurrentVideoPath(path) {
-    appState.set('currentVideoPath', path);
-}
-
 function getRandomSeed() {
     return appState.get('randomSeed');
 }
@@ -245,23 +237,19 @@ async function loadStats() {
     }
 }
 
-async function playVideo(videoIdOrVideo, title, tags, filePath) {
+async function playVideo(videoIdOrVideo, title, tags) {
     try {
-        let videoId, videoTitle, videoTags, videoFilePath;
+        let videoId, videoTitle, videoTags;
         
         if (typeof videoIdOrVideo === 'object' && videoIdOrVideo !== null) {
             videoId = videoIdOrVideo.id;
             videoTitle = videoIdOrVideo.title;
             videoTags = videoIdOrVideo.tags;
-            videoFilePath = videoIdOrVideo.file_path;
         } else {
             videoId = videoIdOrVideo;
             videoTitle = title;
             videoTags = tags;
-            videoFilePath = filePath;
         }
-        
-        setCurrentVideoPath(videoFilePath);
         
         const data = await videoService.getVideoStreamUrl(videoId);
         

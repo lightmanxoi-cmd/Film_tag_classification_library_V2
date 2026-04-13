@@ -49,7 +49,7 @@ from video_tag_system.utils.random_queue_manager import init_random_queue_manage
 logger = get_logger(__name__)
 
 from web.core.config import config
-from web.core.extensions import cors, init_cors
+from web.core.extensions import init_extensions
 from web.core.errors import register_error_handlers
 from web.auth import auth_bp, init_auth
 from web.pages import pages_bp
@@ -146,11 +146,12 @@ def _init_extensions(app: Flask):
     初始化Flask扩展
     
     初始化CORS等Flask扩展。
+    CORS配置从应用配置中读取，不同环境使用不同策略。
     
     Args:
         app: Flask应用实例
     """
-    init_cors(app)
+    init_extensions(app)
 
 
 def _init_auth(app: Flask):

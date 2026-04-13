@@ -179,7 +179,7 @@ def check_video_exists():
             'video': {
                 'id': existing_video.id,
                 'title': existing_video.title,
-                'file_path': existing_video.file_path,
+                'file_ext': os.path.splitext(existing_video.file_path)[1].lower() if existing_video.file_path else '',
                 'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in existing_video.tags]
             }
         })
@@ -291,7 +291,6 @@ def import_video():
                 'video': {
                     'id': existing_video.id,
                     'title': title,
-                    'file_path': file_path or existing_video.file_path,
                     'tags_added': tags_added,
                     'total_tags': len(updated_tags),
                     'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in updated_tags]
@@ -320,7 +319,6 @@ def import_video():
                 'video': {
                     'id': video.id,
                     'title': title,
-                    'file_path': actual_file_path,
                     'total_tags': len(all_tag_ids),
                     'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags]
                 },
@@ -420,7 +418,6 @@ def batch_import_videos():
                             tags_added += 1
                     
                     results['success'].append({
-                        'file_path': file_path,
                         'title': title,
                         'action': 'updated',
                         'tags_added': tags_added
@@ -434,7 +431,6 @@ def batch_import_videos():
                         video_tag_svc.add_tag_to_video(video.id, tag_id)
                     
                     results['success'].append({
-                        'file_path': file_path,
                         'title': title,
                         'action': 'created',
                         'video_id': video.id
@@ -442,7 +438,7 @@ def batch_import_videos():
         
         except Exception as e:
             results['failed'].append({
-                'file_path': file_path,
+                'title': file_path,
                 'error': str(e)
             })
             

@@ -208,7 +208,7 @@ def get_videos_by_tag(tag_id):
         videos.append({
             'id': v.id,
             'title': video_title,
-            'file_path': v.file_path,
+            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
             'duration': v.duration,
             'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
             'thumbnail': thumbnail,

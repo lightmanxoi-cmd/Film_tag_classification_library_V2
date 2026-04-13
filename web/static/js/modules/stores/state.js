@@ -15,7 +15,6 @@ class AppState {
             randomSeed: Date.now(),
             isRandomOrder: false,
             videoPlayer: null,
-            currentVideoPath: '',
             currentVideoId: null,
             currentVideoTitle: '',
             currentVideoTags: [],
@@ -93,7 +92,6 @@ class AppState {
             randomSeed: Date.now(),
             isRandomOrder: false,
             videoPlayer: null,
-            currentVideoPath: '',
             currentVideoId: null,
             currentVideoTitle: '',
             currentVideoTags: [],
@@ -157,8 +155,7 @@ class AppState {
         this.setMultiple({
             currentVideoId: video.id,
             currentVideoTitle: video.title,
-            currentVideoTags: video.tags,
-            currentVideoPath: video.path
+            currentVideoTags: video.tags
         });
     }
 
@@ -166,8 +163,7 @@ class AppState {
         this.setMultiple({
             currentVideoId: null,
             currentVideoTitle: '',
-            currentVideoTags: [],
-            currentVideoPath: ''
+            currentVideoTags: []
         });
     }
 
@@ -235,7 +231,6 @@ export const stateKeys = {
     RANDOM_SEED: 'randomSeed',
     IS_RANDOM_ORDER: 'isRandomOrder',
     VIDEO_PLAYER: 'videoPlayer',
-    CURRENT_VIDEO_PATH: 'currentVideoPath',
     CURRENT_VIDEO_ID: 'currentVideoId',
     CURRENT_VIDEO_TITLE: 'currentVideoTitle',
     CURRENT_VIDEO_TAGS: 'currentVideoTags',

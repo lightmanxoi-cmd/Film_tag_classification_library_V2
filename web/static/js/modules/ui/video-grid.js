@@ -39,7 +39,7 @@ function createVideoCard(video, isMobile) {
     card.className = 'video-card';
     card.dataset.videoId = video.id;
     
-    const ext = video.file_path.split('.').pop().toLowerCase();
+    const ext = (video.file_ext || '').replace('.', '').toLowerCase();
     const formatClass = ['mkv', 'wmv', 'avi'].includes(ext) ? 'non-native' : '';
     
     const childTags = video.tags.filter(t => t.parent_id);

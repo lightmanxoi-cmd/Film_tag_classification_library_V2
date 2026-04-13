@@ -9,65 +9,51 @@ Flask扩展初始化模块
 使用示例：
     from web.core.extensions import cors
     
-    # 在应用中初始化
-    cors.init_app(app)
+    # 在应用中初始化（通过init_extensions统一调用）
+    from web.core.extensions import init_extensions
+    init_extensions(app)
 
 CORS配置：
-    通过环境变量 CORS_ORIGINS 控制允许的来源：
-    - 未设置或 "*" : 允许所有来源（开发环境）
-    - 多个域名用逗号分隔 : "http://localhost:3000,https://example.com"
-    
-    生产环境建议设置具体的域名列表。
+    通过应用配置控制CORS行为：
+    - CORS_ORIGINS: 允许的来源（逗号分隔），'*'表示允许所有
+    - CORS_METHODS: 允许的HTTP方法列表
+    - CORS_ALLOW_HEADERS: 允许的请求头列表
+    - CORS_MAX_AGE: 预检请求缓存时间（秒）
+
+    开发环境默认允许所有来源，生产环境必须通过CORS_ORIGINS环境变量明确指定。
 """
-import os
 from flask_cors import CORS
 
 cors = CORS()
 
 
-def get_cors_origins():
+def init_extensions(app):
     """
-    获取CORS允许的来源列表
-    
-    从环境变量 CORS_ORIGINS 读取配置：
-    - 未设置或 "*" : 返回 "*"（允许所有）
-    - 逗号分隔的域名 : 返回域名列表
-    
-    Returns:
-        str | list: 允许的来源
-    """
-    origins = os.environ.get('CORS_ORIGINS', '*')
-    
-    if origins == '*':
-        return '*'
-    
-    return [origin.strip() for origin in origins.split(',') if origin.strip()]
+    初始化所有Flask扩展
 
+    根据应用配置初始化CORS等扩展。
+    生产环境必须设置CORS_ORIGINS环境变量，否则将拒绝所有跨域请求。
 
-def init_cors(app):
-    """
-    初始化CORS扩展
-    
-    根据环境变量配置CORS允许的来源。
-    
     Args:
         app: Flask应用实例
     """
-    origins = get_cors_origins()
-    
+    origins = app.config.get('CORS_ORIGINS', '*')
+    methods = app.config.get('CORS_METHODS', ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    allow_headers = app.config.get('CORS_ALLOW_HEADERS', ['Content-Type', 'Authorization', 'X-Requested-With'])
+    max_age = app.config.get('CORS_MAX_AGE', 600)
+
+    if isinstance(origins, str):
+        if origins.strip() == '':
+            origins = []
+        elif origins != '*':
+            origins = [o.strip() for o in origins.split(',') if o.strip()]
+
     cors.init_app(
         app,
-        resources={
-            r"/api/*": {
-                "origins": origins,
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"],
-                "supports_credentials": True
-            }
-        }
+        resources={r"/api/*": {
+            "origins": origins,
+            "methods": methods,
+            "allow_headers": allow_headers,
+            "max_age": max_age
+        }}
     )
-    
-    if origins == '*':
-        app.logger.warning("CORS已配置为允许所有来源，生产环境建议设置 CORS_ORIGINS 环境变量")
-    else:
-        app.logger.info(f"CORS已配置为允许来源: {origins}")
