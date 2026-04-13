@@ -61,6 +61,7 @@ Thumbs.db
 
 # Environment variables
 .env
+.env.example
 .env.local
 
 # Auth config (contains password hash)

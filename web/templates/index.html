@@ -113,19 +113,19 @@
     <div class="electron-titlebar" id="electronTitlebar">
         <span class="title">Video Library</span>
         <div class="window-controls">
-            <button class="window-btn minimize" onclick="window.electronAPI?.minimize()" title="最小化">
+            <button class="window-btn minimize" data-action="electron-minimize" title="最小化">
                 <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 6h8v1H2z"/></svg>
             </button>
-            <button class="window-btn maximize" onclick="window.electronAPI?.maximize()" title="最大化">
+            <button class="window-btn maximize" data-action="electron-maximize" title="最大化">
                 <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 2v8h8V2H2zm1 1h6v6H3V3z"/></svg>
             </button>
-            <button class="window-btn close" onclick="window.electronAPI?.close()" title="关闭">
+            <button class="window-btn close" data-action="electron-close" title="关闭">
                 <svg viewBox="0 0 12 12"><path fill="currentColor" d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
             </button>
         </div>
     </div>
     <nav class="navbar">
-        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" data-action="toggle-mobile-sidebar">
             <span class="hamburger-icon">
                 <span></span>
                 <span></span>
@@ -136,21 +136,21 @@
             <span class="logo">VIDEO LIBRARY</span>
         </div>
         <div class="nav-actions">
-            <button class="advanced-filter-btn" onclick="openAdvancedFilter()">多级筛选</button>
-            <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()" title="全屏模式">
+            <button class="advanced-filter-btn" data-action="open-advanced-filter">多级筛选</button>
+            <button class="fullscreen-btn" id="fullscreenBtn" data-action="toggle-fullscreen" title="全屏模式">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                 </svg>
             </button>
-            <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleVideos()" disabled title="随机排列">
+            <button class="shuffle-btn" id="shuffleBtn" data-action="shuffle-videos" disabled title="随机排列">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
                 </svg>
             </button>
-            <button class="clock-wallpaper-btn" id="clockWallpaperBtn" onclick="openClockWallpaper()" disabled>时钟壁纸</button>
-            <button class="multi-play-btn" id="multiPlayBtn" onclick="openMultiPlay()" disabled>多路同播</button>
-            <button class="random-recommend-btn" id="randomRecommendBtn" onclick="openRandomRecommend()" disabled>随机推荐</button>
-            <button class="video-import-btn" id="videoImportBtn" onclick="openVideoImport()" title="视频导入">
+            <button class="clock-wallpaper-btn" id="clockWallpaperBtn" data-action="open-clock-wallpaper" disabled>时钟壁纸</button>
+            <button class="multi-play-btn" id="multiPlayBtn" data-action="open-multi-play" disabled>多路同播</button>
+            <button class="random-recommend-btn" id="randomRecommendBtn" data-action="open-random-recommend" disabled>随机推荐</button>
+            <button class="video-import-btn" id="videoImportBtn" data-action="open-video-import" title="视频导入">
                 <svg viewBox="0 0 24 24" fill="currentColor" style="width:18px;height:18px;margin-right:4px;">
                     <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
                 </svg>
@@ -159,37 +159,37 @@
         </div>
         <div class="nav-search">
             <input type="text" id="searchInput" placeholder="搜索视频...">
-            <button onclick="searchVideos()">搜索</button>
+            <button data-action="search-videos">搜索</button>
         </div>
         <div class="nav-stats" id="stats">
             <span id="videoCount">0</span> 部视频
         </div>
         <div class="nav-user">
             <span id="sessionTimer" class="session-timer" title="会话剩余时间"></span>
-            <button class="logout-btn" onclick="logout()" title="退出登录">
+            <button class="logout-btn" data-action="logout" title="退出登录">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                     <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
                 </svg>
             </button>
         </div>
-        <button class="mobile-search-btn" id="mobileSearchBtn" onclick="toggleMobileSearch()">
+        <button class="mobile-search-btn" id="mobileSearchBtn" data-action="toggle-mobile-search">
             <span>🔍</span>
         </button>
     </nav>
 
     <div class="mobile-search-bar" id="mobileSearchBar">
         <input type="text" id="mobileSearchInput" placeholder="搜索视频...">
-        <button onclick="mobileSearchVideos()">搜索</button>
-        <button class="close-search-btn" onclick="closeMobileSearch()">✕</button>
+        <button data-action="mobile-search-videos">搜索</button>
+        <button class="close-search-btn" data-action="close-mobile-search">✕</button>
     </div>
 
-    <div class="mobile-overlay" id="mobileOverlay" onclick="closeMobileSidebar()"></div>
+    <div class="mobile-overlay" id="mobileOverlay" data-action="close-mobile-sidebar"></div>
 
     <div class="main-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h3 class="sidebar-title">分类导航</h3>
-                <button class="close-sidebar-btn" onclick="closeMobileSidebar()">✕</button>
+                <button class="close-sidebar-btn" data-action="close-mobile-sidebar">✕</button>
             </div>
             <div id="tagTree" class="tag-tree">
                 <div class="loading">加载中...</div>
@@ -202,7 +202,7 @@
                 <div class="filter-tags-wrapper">
                     <span id="filterTags"></span>
                 </div>
-                <button class="clear-filter" onclick="clearFilter()">清除</button>
+                <button class="clear-filter" data-action="clear-filter">清除</button>
             </div>
 
             <div class="video-grid" id="videoGrid">
@@ -216,7 +216,7 @@
 
     <div class="video-player-modal" id="videoModal">
         <div class="modal-content">
-            <button class="close-btn" onclick="closeVideoModal()">&times;</button>
+            <button class="close-btn" data-action="close-video-modal">&times;</button>
             <div class="video-info">
                 <h2 id="modalTitle"></h2>
                 <div class="video-tags" id="modalTags"></div>
@@ -238,7 +238,7 @@
         <div class="filter-modal-content">
             <div class="filter-modal-header">
                 <h2>多级筛选</h2>
-                <button class="close-btn" onclick="closeAdvancedFilter()">&times;</button>
+                <button class="close-btn" data-action="close-advanced-filter">&times;</button>
             </div>
             <div class="filter-modal-body">
                 <div class="filter-hint">同一分类下多选为"或"关系，不同分类间为"和"关系</div>
@@ -253,38 +253,38 @@
                 </div>
             </div>
             <div class="filter-modal-footer">
-                <button class="btn-secondary" onclick="clearFilterSelection()">清除选择</button>
-                <button class="btn-primary" onclick="applyAdvancedFilter()">应用筛选</button>
+                <button class="btn-secondary" data-action="clear-filter-selection">清除选择</button>
+                <button class="btn-primary" data-action="apply-advanced-filter">应用筛选</button>
             </div>
         </div>
     </div>
 
     <div class="mobile-bottom-bar" id="mobileBottomBar">
-        <button class="mobile-bottom-bar-item" onclick="toggleMobileSidebar()">
+        <button class="mobile-bottom-bar-item" data-action="toggle-mobile-sidebar">
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
             </svg>
             <span>分类</span>
         </button>
-        <button class="mobile-bottom-bar-item" onclick="openAdvancedFilter()">
+        <button class="mobile-bottom-bar-item" data-action="open-advanced-filter">
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
             </svg>
             <span>筛选</span>
         </button>
-        <button class="mobile-bottom-bar-item" id="mobileClockBtn" onclick="openClockWallpaper()" disabled>
+        <button class="mobile-bottom-bar-item" id="mobileClockBtn" data-action="open-clock-wallpaper" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
             </svg>
             <span>时钟</span>
         </button>
-        <button class="mobile-bottom-bar-item" id="mobileRandomBtn" onclick="openRandomRecommend()" disabled>
+        <button class="mobile-bottom-bar-item" id="mobileRandomBtn" data-action="open-random-recommend" disabled>
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
             </svg>
             <span>随机</span>
         </button>
-        <button class="mobile-bottom-bar-item" onclick="toggleMobileSearch()">
+        <button class="mobile-bottom-bar-item" data-action="toggle-mobile-search">
             <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
             </svg>
@@ -310,8 +310,8 @@
                     enableHapticFeedback: true,
                     enableSwipeNavigation: true,
                     onRefresh: () => {
-                        if (typeof loadVideos === 'function') {
-                            loadVideos(1);
+                        if (typeof window.loadVideos === 'function') {
+                            window.loadVideos(1);
                         }
                         return Promise.resolve();
                     },
@@ -334,18 +334,13 @@
                     }, 500);
                 }
                 
-                const originalApplyAdvancedFilter = window.applyAdvancedFilter;
-                if (typeof originalApplyAdvancedFilter === 'function') {
-                    window.applyAdvancedFilter = async function() {
-                        await originalApplyAdvancedFilter();
-                        
-                        const mobileClockBtn = document.getElementById('mobileClockBtn');
-                        const mobileRandomBtn = document.getElementById('mobileRandomBtn');
-                        
-                        if (mobileClockBtn) mobileClockBtn.disabled = false;
-                        if (mobileRandomBtn) mobileRandomBtn.disabled = false;
-                    };
-                }
+                document.addEventListener('advanced-filter-applied', function() {
+                    const mobileClockBtn = document.getElementById('mobileClockBtn');
+                    const mobileRandomBtn = document.getElementById('mobileRandomBtn');
+                    
+                    if (mobileClockBtn) mobileClockBtn.disabled = false;
+                    if (mobileRandomBtn) mobileRandomBtn.disabled = false;
+                });
                 
                 console.log('[Mobile] 移动端优化已启用');
             }
