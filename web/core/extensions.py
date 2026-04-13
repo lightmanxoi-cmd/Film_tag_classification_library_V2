@@ -5,6 +5,7 @@ Flask扩展初始化模块
 
 扩展列表：
     - cors: Flask-CORS跨域支持扩展
+    - sess: Flask-Session服务端会话存储扩展
 
 使用示例：
     from web.core.extensions import cors
@@ -21,17 +22,30 @@ CORS配置：
     - CORS_MAX_AGE: 预检请求缓存时间（秒）
 
     开发环境默认允许所有来源，生产环境必须通过CORS_ORIGINS环境变量明确指定。
+
+Session配置：
+    使用Flask-Session实现服务端会话存储，替代默认的客户端签名Cookie。
+    - SESSION_TYPE: 存储类型（默认filesystem）
+    - SESSION_FILE_DIR: 文件存储目录
+    - SESSION_FILE_THRESHOLD: 文件存储阈值
+    服务端存储的优势：
+    - 可在服务端主动失效会话
+    - 会话数据不暴露给客户端
+    - 支持会话超时和空闲失效
 """
+import os
 from flask_cors import CORS
+from flask_session import Session
 
 cors = CORS()
+sess = Session()
 
 
 def init_extensions(app):
     """
     初始化所有Flask扩展
 
-    根据应用配置初始化CORS等扩展。
+    根据应用配置初始化CORS和Session等扩展。
     生产环境必须设置CORS_ORIGINS环境变量，否则将拒绝所有跨域请求。
 
     Args:
@@ -57,3 +71,9 @@ def init_extensions(app):
             "max_age": max_age
         }}
     )
+    
+    session_dir = app.config.get('SESSION_FILE_DIR')
+    if session_dir:
+        os.makedirs(session_dir, exist_ok=True)
+    
+    sess.init_app(app)

@@ -37,7 +37,7 @@ Attributes:
 import os
 import time
 import atexit
-from flask import Flask, g, request
+from flask import Flask, g, request, session
 
 from video_tag_system.core.database import DatabaseManager, get_db_manager as _core_get_db_manager
 from video_tag_system.core.backup_scheduler import init_backup_scheduler, stop_backup_scheduler
@@ -303,17 +303,23 @@ def _register_request_hooks(app: Flask):
     - before_request: 初始化请求上下文、定期清理缓存
     - teardown_request: 清理数据库会话
     - after_request: 确保ES6模块正确的MIME类型
+    - context_processor: 注入模板上下文变量
     
     Args:
         app: Flask应用实例
     """
+    
+    @app.context_processor
+    def inject_config():
+        return {'config': app.config}
     
     @app.before_request
     def before_request():
         """
         请求前处理
         
-        初始化请求上下文变量，定期清理过期缓存。
+        初始化请求上下文变量，定期清理过期缓存，
+        更新已认证用户的最后活动时间。
         """
         set_request_id()
         g.db_session = None
@@ -321,6 +327,12 @@ def _register_request_hooks(app: Flask):
         g.tag_service = None
         g.video_tag_service = None
         g.request_start_time = time.time()
+        
+        if session.get('authenticated', False):
+            now = time.time()
+            last_activity = session.get('last_activity', 0)
+            if now - last_activity > 60:
+                session['last_activity'] = now
         
         global _last_cache_cleanup
         if time.time() - _last_cache_cleanup > CACHE_CLEANUP_INTERVAL:

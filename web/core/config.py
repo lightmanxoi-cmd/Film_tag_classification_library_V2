@@ -137,7 +137,15 @@ class Config:
     SESSION_COOKIE_SECURE = False
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(days=365)
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    SESSION_PERMANENT = False
+    
+    SESSION_TYPE = os.environ.get('SESSION_TYPE', 'filesystem')
+    SESSION_FILE_DIR = os.environ.get('SESSION_FILE_DIR', os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'flask_session'))
+    SESSION_FILE_THRESHOLD = int(os.environ.get('SESSION_FILE_THRESHOLD', '500'))
+    
+    INACTIVITY_TIMEOUT = int(os.environ.get('INACTIVITY_TIMEOUT', '7200'))
+    SESSION_ABSOLUTE_TIMEOUT = int(os.environ.get('SESSION_ABSOLUTE_TIMEOUT', '86400'))
     
     DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///./video_library.db'
     DATABASE_ECHO = False

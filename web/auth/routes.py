@@ -25,6 +25,7 @@
     请登录后及时修改密码！
 """
 import secrets
+import time
 from flask import Blueprint, render_template, request, redirect, url_for, session
 
 from web.auth.service import AuthService, init_default_password, get_session_secret
@@ -70,6 +71,8 @@ def login():
         
         if auth_service.verify(password):
             session['authenticated'] = True
+            session['login_time'] = time.time()
+            session['last_activity'] = time.time()
             session.permanent = True
             next_url = request.args.get('next') or url_for('pages.index')
             return redirect(next_url)

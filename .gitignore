@@ -67,6 +67,9 @@ Thumbs.db
 # Auth config (contains password hash)
 .auth_config.json
 
+# Flask-Session server-side session storage
+flask_session/
+
 # Jupyter
 .ipynb_checkpoints/
 
