@@ -45,7 +45,12 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 data/
+
+# Old database data
+db-old/
 
 # Thumbnails (generated)
 web/static/thumbnails/
@@ -77,7 +82,8 @@ flask_session/
 .pytest_cache/
 .coverage
 htmlcov/
-video_library.db-shm
-video_library.db-wal
 backups/.backup_state.json
+
+# Personal notes
+tools/标签命令对应.txt
 tools/命令.txt
