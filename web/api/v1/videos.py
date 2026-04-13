@@ -42,6 +42,8 @@ from web.core.responses import APIResponse
 from web.core.errors import handle_exceptions
 from web.services import ServiceLocator
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
+from web.api.v1.serializers import serialize_video, serialize_video_detail, serialize_paginated_videos
+from web.core.cache_decorator import get_cached_or_fetch
 
 videos_bp = Blueprint('videos', __name__, url_prefix='/videos')
 
@@ -77,28 +79,32 @@ def get_videos():
     random_seed = request.args.get('seed', None, type=int)
     show_all = request.args.get('all_videos', 'false').lower() == 'true'
     
-    cache = get_cache()
     cache_key = f"videos:list:page:{page}:size:{page_size}:search:{search or ''}:random:{random_order}:seed:{random_seed or 0}:all:{show_all}"
-    
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
     
     video_svc = ServiceLocator.get_video_service()
     tag_svc = ServiceLocator.get_tag_service()
     
-    if not search and not show_all:
-        from video_tag_system.models.tag import Tag
-        five_star_tag = tag_svc.get_tag_by_name('五星', parent_name='评级')
-        if five_star_tag:
-            result = video_svc.list_videos_by_tags(
-                tag_ids=[five_star_tag.id],
-                page=page,
-                page_size=page_size,
-                match_all=False,
-                random_order=random_order,
-                random_seed=random_seed
-            )
+    def _fetch():
+        if not search and not show_all:
+            from video_tag_system.models.tag import Tag
+            five_star_tag = tag_svc.get_tag_by_name('五星', parent_name='评级')
+            if five_star_tag:
+                result = video_svc.list_videos_by_tags(
+                    tag_ids=[five_star_tag.id],
+                    page=page,
+                    page_size=page_size,
+                    match_all=False,
+                    random_order=random_order,
+                    random_seed=random_seed
+                )
+            else:
+                result = video_svc.list_videos(
+                    page=page,
+                    page_size=page_size,
+                    search=search,
+                    random_order=random_order,
+                    random_seed=random_seed
+                )
         else:
             result = video_svc.list_videos(
                 page=page,
@@ -107,43 +113,10 @@ def get_videos():
                 random_order=random_order,
                 random_seed=random_seed
             )
-    else:
-        result = video_svc.list_videos(
-            page=page,
-            page_size=page_size,
-            search=search,
-            random_order=random_order,
-            random_seed=random_seed
-        )
+        return serialize_paginated_videos(result)
     
-    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
-    thumbnail_gen = get_thumbnail_generator()
-    
-    videos = []
-    for v in result.items:
-        video_title = v.title or os.path.basename(v.file_path)
-        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
-        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
-        videos.append({
-            'id': v.id,
-            'title': video_title,
-            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
-            'duration': v.duration,
-            'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail,
-            'gif': gif
-        })
-    
-    response_data = {
-        'videos': videos,
-        'total': result.total,
-        'page': result.page,
-        'page_size': result.page_size,
-        'total_pages': result.total_pages
-    }
-    
-    cache.set(cache_key, response_data, ttl=60)
-    return APIResponse.success(data=response_data, cached=False)
+    data, is_cached = get_cached_or_fetch(cache_key, _fetch, ttl=60)
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @videos_bp.route('/<int:video_id>', methods=['GET'])
@@ -162,36 +135,16 @@ def get_video_detail(video_id):
     Example:
         GET /api/v1/videos/1
     """
-    cache = get_cache()
     cache_key = f"{CACHE_KEYS['video_by_id']}:{video_id}"
-    
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
     
     video_svc = ServiceLocator.get_video_service()
     
-    video = video_svc.get_video(video_id)
+    def _fetch():
+        video = video_svc.get_video(video_id)
+        return serialize_video_detail(video)
     
-    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
-    thumbnail_gen = get_thumbnail_generator()
-    video_title = video.title or os.path.basename(video.file_path)
-    thumbnail = video.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
-    gif = video.gif_url if video.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
-    
-    response_data = {
-        'id': video.id,
-        'title': video_title,
-        'file_ext': os.path.splitext(video.file_path)[1].lower() if video.file_path else '',
-        'duration': video.duration,
-        'description': video.description,
-        'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in video.tags],
-        'thumbnail': thumbnail,
-        'gif': gif
-    }
-    
-    cache.set(cache_key, response_data, ttl=120)
-    return APIResponse.success(data=response_data, cached=False)
+    data, is_cached = get_cached_or_fetch(cache_key, _fetch, ttl=120)
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @videos_bp.route('/by-tags', methods=['POST'])
@@ -236,51 +189,22 @@ def get_videos_by_multiple_tags():
             'total_pages': 0
         })
     
-    cache = get_cache()
     tag_ids_str = ','.join(map(str, sorted(tag_ids)))
     cache_key = f"videos:by_tags:{tag_ids_str}:page:{page}:size:{page_size}:all:{match_all}"
     
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
-    
     video_svc = ServiceLocator.get_video_service()
     
-    result = video_svc.list_videos_by_tags(
-        tag_ids=tag_ids,
-        page=page,
-        page_size=page_size,
-        match_all=match_all
-    )
+    def _fetch():
+        result = video_svc.list_videos_by_tags(
+            tag_ids=tag_ids,
+            page=page,
+            page_size=page_size,
+            match_all=match_all
+        )
+        return serialize_paginated_videos(result)
     
-    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
-    thumbnail_gen = get_thumbnail_generator()
-    
-    videos = []
-    for v in result.items:
-        video_title = v.title or os.path.basename(v.file_path)
-        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
-        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
-        videos.append({
-            'id': v.id,
-            'title': video_title,
-            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
-            'duration': v.duration,
-            'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail,
-            'gif': gif
-        })
-    
-    response_data = {
-        'videos': videos,
-        'total': result.total,
-        'page': result.page,
-        'page_size': result.page_size,
-        'total_pages': result.total_pages
-    }
-    
-    cache.set(cache_key, response_data, ttl=60)
-    return APIResponse.success(data=response_data, cached=False)
+    data, is_cached = get_cached_or_fetch(cache_key, _fetch, ttl=60)
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @videos_bp.route('/by-tags-advanced', methods=['POST'])
@@ -333,16 +257,24 @@ def get_videos_by_tags_advanced():
             'total_pages': 0
         })
     
-    cache = get_cache()
     category_str = str(sorted([(k, sorted(v)) for k, v in tags_by_category.items()]))
     cache_key = f"videos:advanced:{hash(category_str)}:page:{page}:size:{page_size}:random:{random_order}:seed:{random_seed or 0}"
     
-    if not random_order:
-        cached_result = cache.get(cache_key)
-        if cached_result is not None:
-            return APIResponse.success(data=cached_result, cached=True)
-    
     video_svc = ServiceLocator.get_video_service()
+    
+    if not random_order:
+        def _fetch():
+            result = video_svc.list_videos_by_tags_advanced(
+                tags_by_category=tags_by_category,
+                page=page,
+                page_size=page_size,
+                random_order=random_order,
+                random_seed=random_seed
+            )
+            return serialize_paginated_videos(result)
+        
+        data, is_cached = get_cached_or_fetch(cache_key, _fetch, ttl=60)
+        return APIResponse.success(data=data, cached=is_cached)
     
     result = video_svc.list_videos_by_tags_advanced(
         tags_by_category=tags_by_category,
@@ -352,33 +284,9 @@ def get_videos_by_tags_advanced():
         random_seed=random_seed
     )
     
-    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
-    thumbnail_gen = get_thumbnail_generator()
+    response_data = serialize_paginated_videos(result)
     
-    videos = []
-    for v in result.items:
-        video_title = v.title or os.path.basename(v.file_path)
-        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
-        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
-        videos.append({
-            'id': v.id,
-            'title': video_title,
-            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
-            'duration': v.duration,
-            'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail,
-            'gif': gif
-        })
-    
-    response_data = {
-        'videos': videos,
-        'total': result.total,
-        'page': result.page,
-        'page_size': result.page_size,
-        'total_pages': result.total_pages
-    }
-    
-    cache.set(cache_key, response_data, ttl=60)
+    get_cache().set(cache_key, response_data, ttl=60)
     return APIResponse.success(data=response_data, cached=False)
 
 

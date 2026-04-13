@@ -47,6 +47,7 @@ HTTP状态码映射：
     - 500: 服务器错误
 """
 import traceback
+import logging
 from functools import wraps
 from flask import jsonify, request, Response
 from video_tag_system.exceptions import (
@@ -123,6 +124,7 @@ def register_error_handlers(app):
         - 500: 服务器内部错误
         - Exception: 未捕获的异常
     """
+    logger = logging.getLogger(__name__)
     
     @app.errorhandler(VideoNotFoundError)
     def handle_video_not_found(error):
@@ -177,6 +179,7 @@ def register_error_handlers(app):
     @app.errorhandler(DatabaseError)
     def handle_database_error(error):
         """处理数据库错误"""
+        logger.error(f"数据库错误: {error}", exc_info=True)
         return APIResponse.error(
             message="数据库操作失败",
             error_code=ErrorCode.DATABASE_ERROR,
@@ -186,6 +189,7 @@ def register_error_handlers(app):
     @app.errorhandler(VideoTagSystemError)
     def handle_system_error(error):
         """处理系统错误"""
+        logger.error(f"系统错误: {error}", exc_info=True)
         return APIResponse.error(
             message=str(error),
             error_code=ErrorCode.UNKNOWN_ERROR,
@@ -216,6 +220,7 @@ def register_error_handlers(app):
     @app.errorhandler(500)
     def handle_internal_error(error):
         """处理服务器内部错误"""
+        logger.error(f"服务器内部错误: {error}", exc_info=True)
         return APIResponse.error(
             message="服务器内部错误",
             error_code=ErrorCode.UNKNOWN_ERROR,
@@ -225,7 +230,7 @@ def register_error_handlers(app):
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
         """处理未捕获的异常"""
-        traceback.print_exc()
+        logger.error(f"未捕获异常: {error}", exc_info=True)
         return APIResponse.error(
             message="发生未知错误",
             error_code=ErrorCode.UNKNOWN_ERROR,
@@ -237,8 +242,11 @@ def handle_exceptions(f):
     """
     异常处理装饰器
     
-    捕获函数中抛出的异常并转换为统一的API响应格式。
-    适用于单个路由函数的异常处理。
+    将函数中抛出的异常传播给Flask全局错误处理器统一处理。
+    全局错误处理器在 register_error_handlers() 中注册，覆盖所有已知异常类型。
+    
+    此装饰器作为扩展点保留，未来可用于添加路由级别的特殊异常处理逻辑。
+    当前实现直接传播异常，避免与全局处理器重复处理。
     
     Args:
         f: 被装饰的函数
@@ -254,46 +262,22 @@ def handle_exceptions(f):
             return APIResponse.success(data=video)
     
     Note:
-        此装饰器会捕获以下异常：
+        异常处理流程：
+        1. 路由函数抛出异常
+        2. 此装饰器不捕获，异常传播到Flask
+        3. Flask全局错误处理器统一处理，返回标准API响应
+        
+        全局处理器覆盖的异常类型：
         - VideoNotFoundError -> 404
         - TagNotFoundError -> 404
+        - DuplicateVideoError -> 409
+        - DuplicateTagError -> 409
         - ValidationError -> 422
+        - DatabaseError -> 500
         - VideoTagSystemError -> 500
-        - Exception -> 500（打印堆栈跟踪）
+        - Exception -> 500（兜底）
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except VideoNotFoundError as e:
-            return APIResponse.error(
-                message=str(e),
-                error_code=ErrorCode.VIDEO_NOT_FOUND,
-                details=e.details,
-                status_code=404
-            )
-        except TagNotFoundError as e:
-            return APIResponse.error(
-                message=str(e),
-                error_code=ErrorCode.TAG_NOT_FOUND,
-                details=e.details,
-                status_code=404
-            )
-        except ValidationError as e:
-            return APIResponse.error(
-                message=str(e),
-                error_code=ErrorCode.VALIDATION_ERROR,
-                details=e.details,
-                status_code=422
-            )
-        except VideoTagSystemError as e:
-            return APIResponse.error(
-                message=str(e),
-                error_code=ErrorCode.UNKNOWN_ERROR,
-                details=e.details,
-                status_code=500
-            )
-        except Exception as e:
-            traceback.print_exc()
-            return APIResponse.server_error(str(e))
+        return f(*args, **kwargs)
     return decorated_function

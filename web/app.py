@@ -340,6 +340,13 @@ def _register_request_hooks(app: Flask):
             cleaned = query_cache.cleanup_expired()
             if cleaned > 0:
                 logger.debug(f"缓存清理: 移除了 {cleaned} 个过期条目")
+            
+            cache_stats = query_cache.get_stats()
+            logger.info(
+                f"缓存统计 | 命中: {cache_stats['hits']} | 未命中: {cache_stats['misses']} | "
+                f"命中率: {cache_stats['hit_rate']} | 大小: {cache_stats['cache_size']} | "
+                f"内存: {cache_stats['memory_usage_mb']}MB"
+            )
     
     @app.after_request
     def after_request(response):
@@ -348,10 +355,33 @@ def _register_request_hooks(app: Flask):
         
         确保JavaScript文件使用正确的MIME类型，
         特别是ES6模块需要 application/javascript。
+        记录API请求日志，包含响应时间、状态码等信息。
         """
         if response.content_type and 'javascript' in response.content_type:
             if request.path.endswith('.js'):
                 response.content_type = 'application/javascript; charset=utf-8'
+        
+        if request.path.startswith('/api/'):
+            start_time = getattr(g, 'request_start_time', None)
+            if start_time:
+                duration = time.time() - start_time
+                status_code = response.status_code
+                method = request.method
+                path = request.path
+                
+                if status_code >= 500:
+                    logger.error(
+                        f"API请求 | {method} {path} | 状态: {status_code} | 耗时: {duration:.3f}s"
+                    )
+                elif status_code >= 400:
+                    logger.warning(
+                        f"API请求 | {method} {path} | 状态: {status_code} | 耗时: {duration:.3f}s"
+                    )
+                else:
+                    logger.info(
+                        f"API请求 | {method} {path} | 状态: {status_code} | 耗时: {duration:.3f}s"
+                    )
+        
         return response
     
     @app.teardown_request

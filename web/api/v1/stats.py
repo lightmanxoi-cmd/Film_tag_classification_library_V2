@@ -34,6 +34,7 @@ from web.core.errors import handle_exceptions
 from web.services import ServiceLocator
 from video_tag_system.utils.cache import get_cache, CACHE_KEYS
 from video_tag_system.utils.logger import metrics, get_logger
+from web.core.cache_decorator import get_cached_or_fetch
 
 logger = get_logger(__name__)
 stats_bp = Blueprint('stats', __name__, url_prefix='/stats')
@@ -65,26 +66,20 @@ def get_stats():
     Example:
         GET /api/v1/stats
     """
-    cache = get_cache()
     cache_key = CACHE_KEYS['stats']
-    
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
     
     video_svc = ServiceLocator.get_video_service()
     tag_svc = ServiceLocator.get_tag_service()
     
-    video_count = video_svc.count_videos()
-    tag_count = tag_svc.count_tags()
-    
-    result = {
-        'video_count': video_count,
-        'tag_count': tag_count
-    }
-    
-    cache.set(cache_key, result, ttl=60)
-    return APIResponse.success(data=result, cached=False)
+    data, is_cached = get_cached_or_fetch(
+        cache_key=cache_key,
+        fetch_func=lambda: {
+            'video_count': video_svc.count_videos(),
+            'tag_count': tag_svc.count_tags()
+        },
+        ttl=60
+    )
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @stats_bp.route('/metrics', methods=['GET'])
@@ -129,9 +124,13 @@ def get_metrics():
                 'last': recent_values[-1] if recent_values else 0
             }
     
+    cache = get_cache()
+    cache_stats = cache.get_stats()
+    
     return APIResponse.success(data={
         'summary': summary,
-        'raw_metrics': {k: v[-20:] for k, v in all_metrics.items() if v}
+        'raw_metrics': {k: v[-20:] for k, v in all_metrics.items() if v},
+        'cache': cache_stats
     })
 
 

@@ -61,7 +61,6 @@ API v1 标签路由模块
         }
     ]
 """
-import os
 from flask import Blueprint, request, g
 
 from web.auth.decorators import login_required
@@ -76,6 +75,8 @@ from video_tag_system.exceptions import (
     ValidationError,
     TagMergeError
 )
+from web.api.v1.serializers import serialize_paginated_videos
+from web.core.cache_decorator import get_cached_or_fetch
 
 tags_bp = Blueprint('tags', __name__, url_prefix='/tags')
 
@@ -117,43 +118,40 @@ def get_tag_tree():
     Example:
         GET /api/v1/tags/tree
     """
-    cache = get_cache()
     cache_key = CACHE_KEYS['tag_tree']
-    
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
     
     tag_svc = ServiceLocator.get_tag_service()
     video_tag_svc = ServiceLocator.get_video_tag_service()
     
-    tree = tag_svc.get_tag_tree()
-    result = []
-    for item in tree.items:
-        tag_data = {
-            'id': item.id,
-            'name': item.name,
-            'parent_id': item.parent_id,
-            'description': item.description,
-            'sort_order': item.sort_order,
-            'level': item.level,
-            'children': []
-        }
-        for child in item.children:
-            video_count = video_tag_svc.get_tag_video_count(child.id)
-            tag_data['children'].append({
-                'id': child.id,
-                'name': child.name,
-                'parent_id': child.parent_id,
-                'description': child.description,
-                'sort_order': child.sort_order,
-                'level': child.level,
-                'video_count': video_count
-            })
-        result.append(tag_data)
+    def _build_tag_tree():
+        tree = tag_svc.get_tag_tree()
+        result = []
+        for item in tree.items:
+            tag_data = {
+                'id': item.id,
+                'name': item.name,
+                'parent_id': item.parent_id,
+                'description': item.description,
+                'sort_order': item.sort_order,
+                'level': item.level,
+                'children': []
+            }
+            for child in item.children:
+                video_count = video_tag_svc.get_tag_video_count(child.id)
+                tag_data['children'].append({
+                    'id': child.id,
+                    'name': child.name,
+                    'parent_id': child.parent_id,
+                    'description': child.description,
+                    'sort_order': child.sort_order,
+                    'level': child.level,
+                    'video_count': video_count
+                })
+            result.append(tag_data)
+        return result
     
-    cache.set(cache_key, result, ttl=120)
-    return APIResponse.success(data=result, cached=False)
+    data, is_cached = get_cached_or_fetch(cache_key, _build_tag_tree, ttl=120)
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @tags_bp.route('/<int:tag_id>/videos', methods=['GET'])
@@ -181,50 +179,21 @@ def get_videos_by_tag(tag_id):
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 50, type=int)
     
-    cache = get_cache()
     cache_key = f"videos:tag:{tag_id}:page:{page}:size:{page_size}"
-    
-    cached_result = cache.get(cache_key)
-    if cached_result is not None:
-        return APIResponse.success(data=cached_result, cached=True)
     
     video_svc = ServiceLocator.get_video_service()
     
-    result = video_svc.list_videos_by_tags(
-        tag_ids=[tag_id],
-        page=page,
-        page_size=page_size,
-        match_all=False
-    )
+    def _fetch():
+        result = video_svc.list_videos_by_tags(
+            tag_ids=[tag_id],
+            page=page,
+            page_size=page_size,
+            match_all=False
+        )
+        return serialize_paginated_videos(result)
     
-    from video_tag_system.utils.thumbnail_generator import get_thumbnail_generator
-    thumbnail_gen = get_thumbnail_generator()
-    
-    videos = []
-    for v in result.items:
-        video_title = v.title or os.path.basename(v.file_path)
-        thumbnail = v.thumbnail_url or thumbnail_gen.get_thumbnail_url(video_title)
-        gif = v.gif_url if v.gif_url is not None else thumbnail_gen.get_gif_url(video_title)
-        videos.append({
-            'id': v.id,
-            'title': video_title,
-            'file_ext': os.path.splitext(v.file_path)[1].lower() if v.file_path else '',
-            'duration': v.duration,
-            'tags': [{'id': t.id, 'name': t.name, 'parent_id': t.parent_id} for t in v.tags],
-            'thumbnail': thumbnail,
-            'gif': gif
-        })
-    
-    response_data = {
-        'videos': videos,
-        'total': result.total,
-        'page': result.page,
-        'page_size': result.page_size,
-        'total_pages': result.total_pages
-    }
-    
-    cache.set(cache_key, response_data, ttl=60)
-    return APIResponse.success(data=response_data, cached=False)
+    data, is_cached = get_cached_or_fetch(cache_key, _fetch, ttl=60)
+    return APIResponse.success(data=data, cached=is_cached)
 
 
 @tags_bp.route('', methods=['POST'])
