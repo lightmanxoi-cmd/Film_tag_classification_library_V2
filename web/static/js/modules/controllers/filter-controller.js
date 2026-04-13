@@ -10,94 +10,25 @@ import {
 import { showLoading, showError as showVideoError, renderVideos } from '../ui/video-grid.js';
 import { renderPagination } from '../ui/pagination.js';
 import { closeMobileSidebar } from '../ui/mobile.js';
+import { throttle, withLoading } from '../utils/debounce.js';
 
-function getCurrentPage() {
-    return appState.get('currentPage');
-}
-
-function setCurrentPage(page) {
-    appState.set('currentPage', page);
-}
-
-function getCurrentTagIds() {
-    return appState.get('currentTagIds');
-}
-
-function setCurrentTagIds(ids) {
-    appState.set('currentTagIds', ids);
-}
-
-function getAllTags() {
-    return appState.get('allTags');
-}
-
-function getRandomSeed() {
-    return appState.get('randomSeed');
-}
-
-function setRandomSeed(seed) {
-    appState.set('randomSeed', seed);
-}
-
-function getIsRandomOrder() {
-    return appState.get('isRandomOrder');
-}
-
-function setIsRandomOrder(value) {
-    appState.set('isRandomOrder', value);
-}
-
-function getSelectedFilterTags() {
-    return appState.get('selectedFilterTags');
-}
-
-function setSelectedFilterTags(tags) {
-    appState.set('selectedFilterTags', tags);
-}
-
-function getSelectedFilterTagsByCategory() {
-    return appState.get('selectedFilterTagsByCategory');
-}
-
-function setSelectedFilterTagsByCategory(obj) {
-    appState.set('selectedFilterTagsByCategory', obj);
-}
-
-async function loadVideosByTagsAdvanced(tagsByCategory, shuffle = false, onVideoClick) {
+async function loadVideosByTagsAdvanced(tagsByCategory, shuffle, onVideoClick) {
     showLoading('videoGrid');
 
     try {
         const data = await videoService.loadVideosByTagsAdvanced(tagsByCategory, shuffle);
         renderVideos(data.videos, 'videoGrid', { onVideoClick });
         renderPagination(data, 'pagination', { onPageChange: (page) => {
-            setCurrentPage(page);
-            loadVideosByTagsAdvanced(getSelectedFilterTagsByCategory(), false, onVideoClick);
+            appState.set('currentPage', page);
+            loadVideosByTagsAdvanced(appState.get('selectedFilterTagsByCategory'), false, onVideoClick);
         }});
     } catch (error) {
         showVideoError('videoGrid');
     }
 }
 
-export function filterByTag(tagId, tagName, onVideoClick) {
-    highlightActiveTag(tagId);
-
-    setCurrentTagIds([tagId]);
-    setSelectedFilterTagsByCategory({});
-    setIsRandomOrder(false);
-    setRandomSeed(Date.now());
-
-    const filterContainer = document.getElementById('currentFilter');
-    filterContainer.style.display = 'flex';
-    document.getElementById('filterTags').innerHTML = `
-        <span class="filter-tag">${tagName}</span>
-    `;
-
-    closeMobileSidebar();
-    loadVideosByTagIds(1, onVideoClick);
-}
-
 async function loadVideosByTagIds(page, onVideoClick) {
-    setCurrentPage(page);
+    appState.set('currentPage', page);
     showLoading('videoGrid');
 
     try {
@@ -109,12 +40,30 @@ async function loadVideosByTagIds(page, onVideoClick) {
     }
 }
 
+export const filterByTag = throttle(function (tagId, tagName, onVideoClick) {
+    highlightActiveTag(tagId);
+
+    appState.set('currentTagIds', [tagId]);
+    appState.set('selectedFilterTagsByCategory', {});
+    appState.set('isRandomOrder', false);
+    appState.set('randomSeed', Date.now());
+
+    const filterContainer = document.getElementById('currentFilter');
+    filterContainer.style.display = 'flex';
+    document.getElementById('filterTags').innerHTML = `
+        <span class="filter-tag">${tagName}</span>
+    `;
+
+    closeMobileSidebar();
+    loadVideosByTagIds(1, onVideoClick);
+}, 500);
+
 export function clearFilter(onVideoClick) {
-    setCurrentTagIds([]);
-    setSelectedFilterTags([]);
-    setSelectedFilterTagsByCategory({});
-    setRandomSeed(Date.now());
-    setIsRandomOrder(false);
+    appState.set('currentTagIds', []);
+    appState.set('selectedFilterTags', []);
+    appState.set('selectedFilterTagsByCategory', {});
+    appState.set('randomSeed', Date.now());
+    appState.set('isRandomOrder', false);
 
     clearActiveTags();
 
@@ -130,7 +79,7 @@ export function openAdvancedFilter() {
     const modal = document.getElementById('advancedFilterModal');
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
-    renderFilterTags(getAllTags());
+    renderFilterTags(appState.get('allTags'));
 }
 
 export function closeAdvancedFilter() {
@@ -143,10 +92,10 @@ export function clearFilterSelection() {
     clearFilterSelectionUI();
 }
 
-export async function applyAdvancedFilter(onVideoClick) {
-    const filterTags = getSelectedFilterTags();
-    const filterTagsByCategory = getSelectedFilterTagsByCategory();
-    const tags = getAllTags();
+export const applyAdvancedFilter = withLoading(async function (onVideoClick) {
+    const filterTags = appState.get('selectedFilterTags');
+    const filterTagsByCategory = appState.get('selectedFilterTagsByCategory');
+    const tags = appState.get('allTags');
 
     if (filterTags.length === 0) {
         showToast('请至少选择一个标签');
@@ -155,10 +104,10 @@ export async function applyAdvancedFilter(onVideoClick) {
 
     closeAdvancedFilter();
 
-    setCurrentTagIds([...filterTags]);
-    setCurrentPage(1);
-    setIsRandomOrder(false);
-    setRandomSeed(Date.now());
+    appState.set('currentTagIds', [...filterTags]);
+    appState.set('currentPage', 1);
+    appState.set('isRandomOrder', false);
+    appState.set('randomSeed', Date.now());
 
     const filterContainer = document.getElementById('currentFilter');
     renderCurrentFilter(filterTagsByCategory, tags);
@@ -172,61 +121,61 @@ export async function applyAdvancedFilter(onVideoClick) {
     await loadVideosByTagsAdvanced(filterTagsByCategory, false, onVideoClick);
 
     document.dispatchEvent(new CustomEvent('advanced-filter-applied'));
-}
+}, null);
 
-export async function shuffleVideos(onVideoClick) {
-    const filterTagsByCategory = getSelectedFilterTagsByCategory();
+export const shuffleVideos = withLoading(async function (onVideoClick) {
+    const filterTagsByCategory = appState.get('selectedFilterTagsByCategory');
 
     if (Object.keys(filterTagsByCategory).length === 0) {
         return;
     }
 
+    appState.set('randomSeed', Date.now());
+    appState.set('isRandomOrder', true);
+    appState.set('currentPage', 1);
+
     const shuffleBtn = document.getElementById('shuffleBtn');
     shuffleBtn.classList.add('shuffling');
-
-    setRandomSeed(Date.now());
-    setIsRandomOrder(true);
-    setCurrentPage(1);
 
     await loadVideosByTagsAdvanced(filterTagsByCategory, true, onVideoClick);
 
     setTimeout(() => {
         shuffleBtn.classList.remove('shuffling');
     }, 300);
-}
+}, 'shuffleBtn');
 
 export function goToAdvancedFilterPage(page, onVideoClick) {
-    setCurrentPage(page);
-    loadVideosByTagsAdvanced(getSelectedFilterTagsByCategory(), false, onVideoClick);
+    appState.set('currentPage', page);
+    loadVideosByTagsAdvanced(appState.get('selectedFilterTagsByCategory'), false, onVideoClick);
 }
 
 export function openClockWallpaper() {
-    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
+    if (Object.keys(appState.get('selectedFilterTagsByCategory')).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
 
-    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
+    const params = encodeURIComponent(JSON.stringify(appState.get('selectedFilterTagsByCategory')));
     window.location.href = `/clock-wallpaper?filter=${params}`;
 }
 
 export function openMultiPlay() {
-    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
+    if (Object.keys(appState.get('selectedFilterTagsByCategory')).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
 
-    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
+    const params = encodeURIComponent(JSON.stringify(appState.get('selectedFilterTagsByCategory')));
     window.location.href = `/multi-play?filter=${params}`;
 }
 
 export function openRandomRecommend() {
-    if (Object.keys(getSelectedFilterTagsByCategory()).length === 0) {
+    if (Object.keys(appState.get('selectedFilterTagsByCategory')).length === 0) {
         showToast('请先进行多级筛选');
         return;
     }
 
-    const params = encodeURIComponent(JSON.stringify(getSelectedFilterTagsByCategory()));
+    const params = encodeURIComponent(JSON.stringify(appState.get('selectedFilterTagsByCategory')));
     window.location.href = `/random-recommend?filter=${params}`;
 }
 

@@ -5,6 +5,7 @@
 export { formatTime, formatVideoCount, formatVideoCountEn, formatFileSize } from './format.js';
 export { getUrlParams, getQueryParam, setQueryParam, buildQueryString, encodeFilterParams } from './url.js';
 export { shuffleArray, createShuffledIndices, uniqueBy, groupBy } from './array.js';
+export { debounce, throttle, withLoading } from './debounce.js';
 export { sessionManager, initSessionTimeout } from './session.js';
 export { initTouchGestures, initSwipeToClose } from './touch.js';
 export { 

@@ -3,20 +3,10 @@ import { videoService } from '../services/video.js';
 import { showLoading, showError as showVideoError, renderVideos } from '../ui/video-grid.js';
 import { renderPagination } from '../ui/pagination.js';
 import { closeMobileSearch } from '../ui/mobile.js';
+import { debounce } from '../utils/debounce.js';
 
-function setCurrentTagIds(ids) {
-    appState.set('currentTagIds', ids);
-}
-
-export async function searchVideos(onVideoClick) {
-    const keyword = document.getElementById('searchInput').value.trim();
-
-    if (!keyword) {
-        loadVideos(1, onVideoClick);
-        return;
-    }
-
-    setCurrentTagIds([]);
+async function doSearch(keyword, onVideoClick) {
+    appState.set('currentTagIds', []);
     document.getElementById('currentFilter').style.display = 'none';
     showLoading('videoGrid', '搜索中...');
 
@@ -34,7 +24,18 @@ export async function searchVideos(onVideoClick) {
     }
 }
 
-export async function mobileSearchVideos(onVideoClick) {
+export const searchVideos = debounce(function (onVideoClick) {
+    const keyword = document.getElementById('searchInput').value.trim();
+
+    if (!keyword) {
+        loadVideos(1, onVideoClick);
+        return;
+    }
+
+    doSearch(keyword, onVideoClick);
+}, 300);
+
+export const mobileSearchVideos = debounce(function (onVideoClick) {
     const keyword = document.getElementById('mobileSearchInput').value.trim();
 
     if (!keyword) {
@@ -43,25 +44,8 @@ export async function mobileSearchVideos(onVideoClick) {
         return;
     }
 
-    setCurrentTagIds([]);
-    document.getElementById('currentFilter').style.display = 'none';
-    showLoading('videoGrid', '搜索中...');
-
-    try {
-        const data = await videoService.searchVideos(keyword);
-        renderVideos(data.videos, 'videoGrid', { onVideoClick });
-        renderPagination(data, 'pagination', { onPageChange: (page) => loadVideos(page, onVideoClick) });
-
-        document.getElementById('currentFilter').style.display = 'flex';
-        document.getElementById('filterTags').innerHTML = `
-            <span class="filter-tag">搜索: "${keyword}"</span>
-        `;
-        closeMobileSearch();
-    } catch (error) {
-        showVideoError('videoGrid', '搜索失败');
-        closeMobileSearch();
-    }
-}
+    doSearch(keyword, onVideoClick).then(() => closeMobileSearch());
+}, 300);
 
 async function loadVideos(page = 1, onVideoClick) {
     appState.set('currentPage', page);
