@@ -6,6 +6,7 @@
 主要功能：
 1. 目录镜像创建：根据源文件夹A的子文件夹结构，在目标文件夹B中创建相同的空文件夹结构
 2. 标签索引移动：根据文件名中的标签索引，将视频文件移动到对应的分类文件夹
+3. 批量目录镜像创建：在目标文件夹B的每个一级子文件夹内，按照源文件夹A的一级子文件夹结构创建对应的二级空文件夹
 
 使用方式：
     python tools/video_file_manager.py
@@ -405,6 +406,148 @@ def move_videos_by_tag_index():
     print()
 
 
+def get_first_level_subfolders(root_path: str) -> list:
+    """
+    获取指定文件夹中的所有一级子文件夹名称。
+
+    Args:
+        root_path: 根文件夹路径
+
+    Returns:
+        一级子文件夹名称列表
+    """
+    subfolders = []
+    
+    if not os.path.isdir(root_path):
+        return subfolders
+    
+    try:
+        for item in os.listdir(root_path):
+            item_path = os.path.join(root_path, item)
+            if os.path.isdir(item_path):
+                subfolders.append(item)
+    except PermissionError:
+        print(f"  [警告] 无权限访问文件夹: {root_path}")
+    except Exception as e:
+        print(f"  [错误] 读取文件夹时出错: {root_path} - {e}")
+    
+    return subfolders
+
+
+def batch_mirror_folder_structure():
+    """
+    批量目录镜像创建功能
+    
+    读取源文件夹A的一级子文件夹结构，
+    在目标文件夹B的每个一级子文件夹内创建对应的二级空文件夹。
+    """
+    print("\n" + "=" * 60)
+    print("批量目录镜像创建")
+    print("=" * 60)
+    print()
+    print("本功能将读取源文件夹A的一级子文件夹结构，")
+    print("在目标文件夹B的每个一级子文件夹内创建对应的二级空文件夹。")
+    print()
+    print("示例说明：")
+    print("  源文件夹A结构: A/文件夹1, A/文件夹2, A/文件夹3")
+    print("  目标文件夹B结构: B/分类X, B/分类Y")
+    print("  执行后B的结构: B/分类X/文件夹1, B/分类X/文件夹2, B/分类X/文件夹3")
+    print("                B/分类Y/文件夹1, B/分类Y/文件夹2, B/分类Y/文件夹3")
+    print()
+    
+    print("请输入源文件夹路径A（读取此文件夹的一级子文件夹结构）:")
+    source_path = get_folder_path("源文件夹路径: ")
+    if source_path is None:
+        return
+    print(f"  已选择: {source_path}")
+    print()
+    
+    print("请输入目标文件夹路径B（在此文件夹的每个一级子文件夹内创建结构）:")
+    target_path = get_folder_path("目标文件夹路径: ")
+    if target_path is None:
+        return
+    print(f"  已选择: {target_path}")
+    print()
+    
+    if source_path == target_path:
+        print("错误：源文件夹和目标文件夹不能相同！")
+        return
+    
+    source_subfolders = get_first_level_subfolders(source_path)
+    
+    if not source_subfolders:
+        print("源文件夹中没有一级子文件夹，无需创建。")
+        return
+    
+    print(f"源文件夹中共有 {len(source_subfolders)} 个一级子文件夹:")
+    for folder in sorted(source_subfolders):
+        print(f"  - {folder}")
+    print()
+    
+    target_subfolders = get_first_level_subfolders(target_path)
+    
+    if not target_subfolders:
+        print("目标文件夹中没有一级子文件夹，无法创建二级文件夹结构。")
+        return
+    
+    print(f"目标文件夹中共有 {len(target_subfolders)} 个一级子文件夹:")
+    for folder in sorted(target_subfolders):
+        print(f"  - {folder}")
+    print()
+    
+    total_to_create = len(source_subfolders) * len(target_subfolders)
+    print(f"预计将创建最多 {total_to_create} 个二级文件夹。")
+    print()
+    
+    print("即将开始批量创建文件夹结构。")
+    confirm = input("确认继续？(y/n): ").strip().lower()
+    
+    if confirm != 'y':
+        print("操作已取消。")
+        return
+    
+    print()
+    print("开始批量创建文件夹结构...")
+    print("=" * 60)
+    
+    total_created = 0
+    total_skipped = 0
+    total_failed = 0
+    
+    for target_subfolder in sorted(target_subfolders):
+        target_subfolder_path = os.path.join(target_path, target_subfolder)
+        
+        print()
+        print(f"[处理目标文件夹] {target_subfolder}")
+        print("-" * 50)
+        
+        for source_subfolder in sorted(source_subfolders):
+            new_folder_path = os.path.join(target_subfolder_path, source_subfolder)
+            
+            if os.path.exists(new_folder_path):
+                print(f"  [跳过] 已存在: {target_subfolder}/{source_subfolder}")
+                total_skipped += 1
+            else:
+                try:
+                    os.makedirs(new_folder_path, exist_ok=True)
+                    print(f"  [创建] {target_subfolder}/{source_subfolder}")
+                    total_created += 1
+                except PermissionError:
+                    print(f"  [失败] 无权限: {target_subfolder}/{source_subfolder}")
+                    total_failed += 1
+                except Exception as e:
+                    print(f"  [失败] {target_subfolder}/{source_subfolder} - 错误: {e}")
+                    total_failed += 1
+    
+    print()
+    print("=" * 60)
+    print("批量创建操作完成！")
+    print(f"  成功创建: {total_created} 个文件夹")
+    print(f"  跳过（已存在）: {total_skipped} 个文件夹")
+    print(f"  失败: {total_failed} 个文件夹")
+    print()
+
+
 def show_main_menu():
     """
     显示主菜单界面
@@ -421,6 +564,9 @@ def show_main_menu():
     print("  2. 标签索引移动")
     print("     - 根据文件名中的标签索引将视频文件移动到对应分类文件夹")
     print()
+    print("  3. 批量目录镜像创建")
+    print("     - 在目标文件夹的每个一级子文件夹内创建源文件夹的一级子文件夹结构")
+    print()
     print("  q. 退出程序")
     print()
 
@@ -433,7 +579,7 @@ def main():
         try:
             show_main_menu()
             
-            choice = input("请输入选项 (1/2/q): ").strip().lower()
+            choice = input("请输入选项 (1/2/3/q): ").strip().lower()
             
             if choice == 'q':
                 print("\n感谢使用，再见！")
@@ -442,6 +588,8 @@ def main():
                 mirror_folder_structure()
             elif choice == '2':
                 move_videos_by_tag_index()
+            elif choice == '3':
+                batch_mirror_folder_structure()
             else:
                 print("无效的选项，请重新选择。")
             
